@@ -53,7 +53,7 @@ class AIProviderConfig(BaseModel):
     
     @validator('provider')
     def validate_provider(cls, v):
-        valid_providers = {'openai', 'anthropic', 'ollama'}
+        valid_providers = {'openai', 'anthropic', 'xai', 'groq', 'ollama'}
         if v.lower() not in valid_providers:
             raise ValueError(f'Provider must be one of {valid_providers}')
         return v.lower()
@@ -243,6 +243,8 @@ class ConfigManager:
             'model_name': os.getenv('AI_MODEL_NAME') or ai_config.get('model_name', 'gpt-4'),
             'api_key': (os.getenv('OPENAI_API_KEY') or 
                        os.getenv('ANTHROPIC_API_KEY') or 
+                       os.getenv('XAI_API_KEY') or 
+                       os.getenv('GROQ_API_KEY') or 
                        os.getenv('OLLAMA_API_KEY') or 
                        ai_config.get('api_key')),
             'temperature': float(os.getenv('AI_TEMPERATURE', ai_config.get('temperature', 0.1))),
@@ -401,6 +403,10 @@ class ConfigManager:
                 validation_results['warnings'].append('OpenAI API key not found in environment')
             elif config.ai_provider.provider == 'anthropic' and not os.getenv('ANTHROPIC_API_KEY'):
                 validation_results['warnings'].append('Anthropic API key not found in environment')
+            elif config.ai_provider.provider == 'xai' and not os.getenv('XAI_API_KEY'):
+                validation_results['warnings'].append('xAI API key not found in environment')
+            elif config.ai_provider.provider == 'groq' and not os.getenv('GROQ_API_KEY'):
+                validation_results['warnings'].append('Groq API key not found in environment')
             elif config.ai_provider.provider == 'ollama':
                 # For Ollama, check if the service is accessible
                 validation_results['warnings'].append('Ollama configured - ensure Ollama server is running')
@@ -512,6 +518,6 @@ def get_quick_config() -> AgentConfig:
         ),
         ai_provider=AIProviderConfig(
             provider=os.getenv('AI_PROVIDER', 'openai'),
-            api_key=os.getenv('OPENAI_API_KEY') or os.getenv('ANTHROPIC_API_KEY')
+            api_key=os.getenv('OPENAI_API_KEY') or os.getenv('ANTHROPIC_API_KEY') or os.getenv('XAI_API_KEY')
         )
     )

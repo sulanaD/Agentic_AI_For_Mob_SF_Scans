@@ -192,44 +192,42 @@ class MobileSecurityAgent:
         try:
             logger.info(f"Starting LangGraph-based security scan for: {file_path}")
             
-            # Initialize workflow state
-            initial_state = SecurityAnalysisState(
-                file_path=file_path,
-                app_name=app_name or Path(file_path).stem,
-                report_formats=report_formats,
-                cleanup_scan=cleanup_scan,
-                config=self.config.dict(),
-                status="starting",
-                current_step="initialize"
+            # Execute the complete workflow using LangGraph
+            # Generate a unique thread_id for this analysis
+            import uuid
+            thread_id = f"scan_{uuid.uuid4().hex[:8]}"
+            
+            final_state = self.workflow.analyze_mobile_app(
+                app_file_path=file_path,
+                config=self.config.dict() if hasattr(self.config, 'dict') else {},
+                thread_id=thread_id
             )
             
-            # Execute the complete workflow using LangGraph
-            final_state = await self.workflow.run_complete_analysis(initial_state)
-            
-            # Check for errors
-            if final_state.status == "error":
-                error_msg = final_state.error_message or "Unknown workflow error"
+            # Check for errors (final_state is a dict)
+            if final_state.get("status") == "error" or final_state.get("current_step") == "failed":
+                error_msg = final_state.get("errors", ["Unknown workflow error"])[0] if final_state.get("errors") else "Unknown workflow error"
                 logger.error(f"Workflow failed: {error_msg}")
                 raise MobileSecurityAgentError(f"Scan workflow failed: {error_msg}")
             
-            # Create scan result object
+            # Create scan result object (final_state is a dict)
             scan_result = ScanResult(
-                app_info=final_state.app_info or {},
-                raw_scan_data=final_state.scan_results or {},
-                vulnerabilities=final_state.vulnerabilities or [],
-                ai_analyses=final_state.ai_analysis_results or [],
-                categorized_vulnerabilities=final_state.categorized_vulnerabilities or {},
-                summary=final_state.executive_summary or {},
-                reports=final_state.generated_reports or {},
+                app_info=final_state.get("app_info", {}),
+                raw_scan_data=final_state.get("scan_results", {}),
+                vulnerabilities=final_state.get("vulnerabilities", []),
+                ai_analyses=final_state.get("ai_analysis_results", []),
+                categorized_vulnerabilities=final_state.get("categorized_vulnerabilities", {}),
+                summary=final_state.get("executive_summary", {}),
+                reports=final_state.get("generated_reports", {}),
                 scan_metadata={
-                    'scan_id': final_state.scan_id,
-                    'timestamp': final_state.timestamp,
+                    'scan_id': final_state.get("scan_id", "unknown"),
+                    'timestamp': final_state.get("timestamp", datetime.now().isoformat()),
                     'file_path': file_path,
-                    'app_name': final_state.app_name,
-                    'workflow_duration': final_state.processing_time,
-                    'total_vulnerabilities': len(final_state.vulnerabilities or []),
+                    'app_name': final_state.get("app_name", app_name or Path(file_path).stem),
+                    'workflow_duration': final_state.get("processing_time", 0),
+                    'total_vulnerabilities': len(final_state.get("vulnerabilities", [])),
                     'ai_model_used': self.config.ai_provider.model_name,
-                    'ai_provider': self.config.ai_provider.provider
+                    'ai_provider': self.config.ai_provider.provider,
+                    'thread_id': thread_id
                 }
             )
             
