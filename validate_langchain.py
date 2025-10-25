@@ -222,6 +222,123 @@ def test_cli_commands():
         return False
 
 
+def test_countermeasures_generation():
+    """Test the new AI-powered countermeasures generation feature"""
+    print("\n🔍 Testing countermeasures generation...")
+    
+    try:
+        from langchain_analyzer import (
+            LangChainVulnerabilityAnalyzer,
+            VulnerabilityAnalysis,
+            VulnerabilityPriority,
+            SeverityLevel,
+            VulnerabilityCategory
+        )
+        
+        # Create analyzer (using Ollama for testing - no API key needed)
+        analyzer = LangChainVulnerabilityAnalyzer(
+            provider='ollama',
+            model_name='llama2',
+            enable_memory=False
+        )
+        print("✅ Analyzer initialized for countermeasures test")
+        
+        # Create sample vulnerability analyses for testing
+        sample_analyses = [
+            VulnerabilityAnalysis(
+                vulnerability_id="TEST_001",
+                title="SQL Injection in Login",
+                description="Test vulnerability",
+                priority=VulnerabilityPriority(
+                    severity=SeverityLevel.CRITICAL,
+                    priority_score=0.95,
+                    confidence=0.9,
+                    reasoning="Test reasoning",
+                    category=VulnerabilityCategory.INJECTION,
+                    exploitability="High",
+                    business_impact="Critical"
+                ),
+                impact_assessment="Test impact",
+                remediation_steps=["Step 1", "Step 2"],
+                cwe_mapping="CWE-89",
+                owasp_mapping="A03:2021"
+            ),
+            VulnerabilityAnalysis(
+                vulnerability_id="TEST_002",
+                title="Insecure Data Storage",
+                description="Test vulnerability 2",
+                priority=VulnerabilityPriority(
+                    severity=SeverityLevel.HIGH,
+                    priority_score=0.85,
+                    confidence=0.95,
+                    reasoning="Test reasoning",
+                    category=VulnerabilityCategory.STORAGE,
+                    exploitability="Medium",
+                    business_impact="High"
+                ),
+                impact_assessment="Test impact",
+                remediation_steps=["Encrypt data", "Use keystore"],
+                cwe_mapping="CWE-312",
+                owasp_mapping="M2"
+            )
+        ]
+        
+        print(f"✅ Created {len(sample_analyses)} test vulnerabilities")
+        
+        # Test countermeasures generation
+        app_context = {
+            "app_name": "TestApp",
+            "platform": "Android",
+            "package_name": "com.test.app"
+        }
+        
+        print("   Generating countermeasures (this may take a moment)...")
+        countermeasures = analyzer.generate_countermeasures(
+            vulnerability_analyses=sample_analyses,
+            app_context=app_context
+        )
+        
+        # Verify countermeasures structure
+        assert "overview" in countermeasures, "Missing 'overview' in countermeasures"
+        assert "implementation_roadmap" in countermeasures, "Missing 'implementation_roadmap'"
+        assert "priority_matrix" in countermeasures, "Missing 'priority_matrix'"
+        assert "categorized_vulnerabilities" in countermeasures, "Missing 'categorized_vulnerabilities'"
+        
+        print("✅ Countermeasures generated successfully")
+        print(f"   Total vulnerabilities: {countermeasures['overview']['total_vulnerabilities']}")
+        print(f"   Critical: {countermeasures['overview']['critical_count']}")
+        print(f"   High: {countermeasures['overview']['high_count']}")
+        
+        # Verify roadmap structure
+        roadmap = countermeasures['implementation_roadmap']
+        assert "immediate_0_24h" in roadmap
+        assert "short_term_1_7d" in roadmap
+        assert "medium_term_1_4w" in roadmap
+        assert "long_term_1_3m" in roadmap
+        print("✅ Implementation roadmap structure verified")
+        
+        # Verify priority matrix
+        priority_matrix = countermeasures['priority_matrix']
+        assert len(priority_matrix) == len(sample_analyses)
+        assert all('vulnerability' in item for item in priority_matrix)
+        assert all('priority_score' in item for item in priority_matrix)
+        print("✅ Priority matrix structure verified")
+        
+        # Display sample roadmap items
+        if roadmap['immediate_0_24h']:
+            print(f"   Immediate actions: {len(roadmap['immediate_0_24h'])} items")
+            print(f"      Example: {roadmap['immediate_0_24h'][0][:60]}...")
+        
+        print("✅ Countermeasures feature working correctly!")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Countermeasures test failed: {e}")
+        traceback.print_exc()
+        return False
+
+
 def test_dependencies():
     """Test that all required dependencies are installed"""
     print("\n🔍 Testing dependencies...")
@@ -269,6 +386,7 @@ def main():
         ("Configuration", test_configuration),
         ("AI Analyzer", test_ai_analyzer),
         ("LangGraph Workflow", test_workflow),
+        ("Countermeasures Generation", test_countermeasures_generation),  # NEW TEST
         ("Agent Creation", test_agent_creation),
         ("CLI Commands", test_cli_commands)
     ]

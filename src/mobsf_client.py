@@ -59,6 +59,10 @@ class MobSFClient:
         """
         url = f"{self.api_url}{endpoint}"
         
+        # Set timeout for large file uploads if not specified
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = (30, 300)  # (connection timeout, read timeout)
+        
         try:
             response = self.session.request(method, url, **kwargs)
             response.raise_for_status()
