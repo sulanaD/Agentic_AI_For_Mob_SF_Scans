@@ -41,6 +41,7 @@ class SecurityAnalysisState(TypedDict):
     vulnerability_analyses: List[VulnerabilityAnalysis]
     categorized_vulnerabilities: Dict[str, List[VulnerabilityAnalysis]]
     executive_summary: Optional[str]
+    countermeasures: Optional[Dict[str, Any]]  # Added countermeasures
     
     # Report generation
     generated_reports: Dict[str, str]
@@ -304,6 +305,36 @@ class SecurityAnalysisWorkflow:
             
             return state
         
+        def generate_countermeasures(state: SecurityAnalysisState) -> SecurityAnalysisState:
+            """Generate comprehensive countermeasures and action plan"""
+            logger.info("Generating countermeasures and action plan")
+            state["current_step"] = "generate_countermeasures"
+            
+            analyses = state.get("vulnerability_analyses", [])
+            
+            if not analyses:
+                state["warnings"].append("No vulnerability analyses available for countermeasures")
+                state["countermeasures"] = None
+                return state
+            
+            try:
+                # Generate countermeasures using AI
+                countermeasures = self.ai_analyzer.generate_countermeasures(
+                    vulnerability_analyses=analyses,
+                    app_context=state["app_info"]
+                )
+                
+                state["countermeasures"] = countermeasures
+                logger.info("Countermeasures and action plan generated successfully")
+                
+            except Exception as e:
+                error_msg = f"Countermeasures generation failed: {str(e)}"
+                logger.error(error_msg)
+                state["errors"].append(error_msg)
+                state["countermeasures"] = None
+            
+            return state
+        
         def generate_reports(state: SecurityAnalysisState) -> SecurityAnalysisState:
             """Generate security reports"""
             logger.info("Generating security reports")
@@ -315,12 +346,13 @@ class SecurityAnalysisWorkflow:
                     state.get("filtered_vulnerabilities", [])
                 )
                 
-                # Generate reports
+                # Generate reports with countermeasures
                 reports = self.report_generator.generate_all_reports(
                     app_info=state["app_info"],
                     categorized_vulnerabilities=state.get("categorized_vulnerabilities", {}),
                     executive_summary=state.get("executive_summary", ""),
                     scan_stats=statistics,
+                    countermeasures=state.get("countermeasures"),  # Include countermeasures
                     formats=state["config"].get("report_formats", ["html", "json"])
                 )
                 
@@ -328,7 +360,8 @@ class SecurityAnalysisWorkflow:
                 state["report_data"] = {
                     "app_info": state["app_info"],
                     "statistics": statistics,
-                    "executive_summary": state.get("executive_summary", "")
+                    "executive_summary": state.get("executive_summary", ""),
+                    "countermeasures": state.get("countermeasures")
                 }
                 
                 logger.info(f"Generated {len(reports)} reports")
@@ -406,6 +439,7 @@ class SecurityAnalysisWorkflow:
         workflow.add_node("analyze_with_ai", analyze_with_ai)
         workflow.add_node("categorize", categorize_vulnerabilities)
         workflow.add_node("executive_summary", generate_executive_summary)
+        workflow.add_node("generate_countermeasures", generate_countermeasures)  # NEW NODE
         workflow.add_node("generate_reports", generate_reports)
         workflow.add_node("finalize", cleanup_and_finalize)
         
@@ -437,7 +471,8 @@ class SecurityAnalysisWorkflow:
         )
         workflow.add_edge("analyze_with_ai", "categorize")
         workflow.add_edge("categorize", "executive_summary")
-        workflow.add_edge("executive_summary", "generate_reports")
+        workflow.add_edge("executive_summary", "generate_countermeasures")  # NEW: Add countermeasures before reports
+        workflow.add_edge("generate_countermeasures", "generate_reports")
         workflow.add_edge("generate_reports", "finalize")
         workflow.add_edge("finalize", END)
         
@@ -481,6 +516,7 @@ class SecurityAnalysisWorkflow:
             "vulnerability_analyses": [],
             "categorized_vulnerabilities": {},
             "executive_summary": None,
+            "countermeasures": None,  # Added countermeasures field
             "generated_reports": {},
             "report_data": None,
             "current_step": "start",
