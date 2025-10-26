@@ -1,5 +1,22 @@
 # Known Issues
 
+## ✅ FIXED: ScanResult Parameter Mismatch (v2.0.1)
+
+### Issue
+Runtime error when completing workflow:
+```
+ScanResult.__init__() got an unexpected keyword argument 'summary'
+```
+
+### Resolution
+**Fixed in commit 5b0d99c**
+- Corrected parameter names to match ScanResult constructor
+- `summary` → `executive_summary`
+- `reports` → `generated_reports`
+- `scan_metadata` → `statistics`
+
+---
+
 ## File I/O Timeout with Sample APK
 
 ### Issue Description
