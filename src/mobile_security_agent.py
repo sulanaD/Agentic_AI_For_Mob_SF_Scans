@@ -234,9 +234,10 @@ class MobileSecurityAgent:
             self.current_scan = scan_result
             self.scan_history.append(scan_result)
             
-            logger.info(f"LangGraph workflow completed successfully for {final_state.app_name}")
-            logger.info(f"Found {len(final_state.vulnerabilities or [])} vulnerabilities")
-            logger.info(f"Generated {len(final_state.generated_reports or {})} reports")
+            app_name_log = final_state.get("app_info", {}).get("app_name", "Unknown")
+            logger.info(f"LangGraph workflow completed successfully for {app_name_log}")
+            logger.info(f"Found {len(final_state.get('vulnerability_analyses', []))} vulnerabilities")
+            logger.info(f"Generated {len(final_state.get('generated_reports', {}))} reports")
             
             return scan_result
             
@@ -468,30 +469,30 @@ class MobileSecurityAgent:
         try:
             final_state = asyncio.run(self.workflow.resume_workflow(workflow_id))
             
-            if final_state.status == "error":
-                error_msg = final_state.error_message or "Unknown workflow error"
+            if final_state.get("status") == "error" or final_state.get("current_step") == "failed":
+                error_msg = final_state.get("errors", ["Unknown workflow error"])[0] if final_state.get("errors") else "Unknown workflow error"
                 raise MobileSecurityAgentError(f"Resumed workflow failed: {error_msg}")
             
             # Create scan result from resumed workflow
             scan_result = ScanResult(
-                app_info=final_state.app_info or {},
-                raw_scan_data=final_state.scan_results or {},
-                vulnerabilities=final_state.vulnerabilities or [],
-                ai_analyses=final_state.ai_analysis_results or [],
-                categorized_vulnerabilities=final_state.categorized_vulnerabilities or {},
-                executive_summary=final_state.executive_summary or "",
+                app_info=final_state.get("app_info", {}),
+                raw_scan_data=final_state.get("raw_scan_results", {}),
+                vulnerabilities=final_state.get("filtered_vulnerabilities", []),
+                ai_analyses=final_state.get("vulnerability_analyses", []),
+                categorized_vulnerabilities=final_state.get("categorized_vulnerabilities", {}),
+                executive_summary=final_state.get("executive_summary", ""),
                 statistics={
-                    'scan_id': final_state.scan_id,
-                    'timestamp': final_state.timestamp,
-                    'file_path': final_state.file_path,
-                    'app_name': final_state.app_name,
-                    'workflow_duration': final_state.processing_time,
-                    'total_vulnerabilities': len(final_state.vulnerabilities or []),
+                    'scan_id': final_state.get("metadata", {}).get("workflow_id", "unknown"),
+                    'timestamp': final_state.get("metadata", {}).get("start_time", datetime.now().isoformat()),
+                    'file_path': final_state.get("app_file_path", ""),
+                    'app_name': final_state.get("app_info", {}).get("app_name", "Unknown"),
+                    'workflow_duration': 0,
+                    'total_vulnerabilities': len(final_state.get("vulnerability_analyses", [])),
                     'ai_model_used': self.config.ai_provider.model_name,
                     'ai_provider': self.config.ai_provider.provider,
                     'resumed_from': workflow_id
                 },
-                generated_reports=final_state.generated_reports or {}
+                generated_reports=final_state.get("generated_reports", {})
             )
             
             # Store in scan history
