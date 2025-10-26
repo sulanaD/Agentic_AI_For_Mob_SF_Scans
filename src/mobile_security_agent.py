@@ -212,23 +212,22 @@ class MobileSecurityAgent:
             # Create scan result object (final_state is a dict)
             scan_result = ScanResult(
                 app_info=final_state.get("app_info", {}),
-                raw_scan_data=final_state.get("scan_results", {}),
-                vulnerabilities=final_state.get("vulnerabilities", []),
-                ai_analyses=final_state.get("ai_analysis_results", []),
+                raw_scan_data=final_state.get("raw_scan_results", {}),
+                vulnerabilities=final_state.get("filtered_vulnerabilities", []),
+                ai_analyses=final_state.get("vulnerability_analyses", []),
                 categorized_vulnerabilities=final_state.get("categorized_vulnerabilities", {}),
-                summary=final_state.get("executive_summary", {}),
-                reports=final_state.get("generated_reports", {}),
-                scan_metadata={
-                    'scan_id': final_state.get("scan_id", "unknown"),
-                    'timestamp': final_state.get("timestamp", datetime.now().isoformat()),
+                executive_summary=final_state.get("executive_summary", ""),
+                statistics={
+                    'scan_id': final_state.get("metadata", {}).get("workflow_id", "unknown"),
+                    'timestamp': final_state.get("metadata", {}).get("start_time", datetime.now().isoformat()),
                     'file_path': file_path,
-                    'app_name': final_state.get("app_name", app_name or Path(file_path).stem),
-                    'workflow_duration': final_state.get("processing_time", 0),
-                    'total_vulnerabilities': len(final_state.get("vulnerabilities", [])),
+                    'app_name': final_state.get("app_info", {}).get("app_name", app_name or Path(file_path).stem),
+                    'workflow_duration': 0,
+                    'total_vulnerabilities': len(final_state.get("vulnerability_analyses", [])),
                     'ai_model_used': self.config.ai_provider.model_name,
-                    'ai_provider': self.config.ai_provider.provider,
-                    'thread_id': thread_id
-                }
+                    'ai_provider': self.config.ai_provider.provider
+                },
+                generated_reports=final_state.get("generated_reports", {})
             )
             
             # Store in scan history
@@ -408,8 +407,8 @@ class MobileSecurityAgent:
                 report_data = self.report_generator.generate_report_data(
                     scan_result.app_info,
                     scan_result.categorized_vulnerabilities,
-                    scan_result.summary,
-                    scan_result.scan_metadata
+                    scan_result.executive_summary,
+                    scan_result.statistics
                 )
                 return self.report_generator.generate_html_report(report_data, template_name)
             
@@ -417,8 +416,8 @@ class MobileSecurityAgent:
                 report_data = self.report_generator.generate_report_data(
                     scan_result.app_info,
                     scan_result.categorized_vulnerabilities,
-                    scan_result.summary,
-                    scan_result.scan_metadata
+                    scan_result.executive_summary,
+                    scan_result.statistics
                 )
                 return self.report_generator.generate_pdf_report(report_data)
             
@@ -426,8 +425,8 @@ class MobileSecurityAgent:
                 report_data = self.report_generator.generate_report_data(
                     scan_result.app_info,
                     scan_result.categorized_vulnerabilities,
-                    scan_result.summary,
-                    scan_result.scan_metadata
+                    scan_result.executive_summary,
+                    scan_result.statistics
                 )
                 return self.report_generator.generate_json_report(report_data)
             
@@ -480,9 +479,8 @@ class MobileSecurityAgent:
                 vulnerabilities=final_state.vulnerabilities or [],
                 ai_analyses=final_state.ai_analysis_results or [],
                 categorized_vulnerabilities=final_state.categorized_vulnerabilities or {},
-                summary=final_state.executive_summary or {},
-                reports=final_state.generated_reports or {},
-                scan_metadata={
+                executive_summary=final_state.executive_summary or "",
+                statistics={
                     'scan_id': final_state.scan_id,
                     'timestamp': final_state.timestamp,
                     'file_path': final_state.file_path,
@@ -492,7 +490,8 @@ class MobileSecurityAgent:
                     'ai_model_used': self.config.ai_provider.model_name,
                     'ai_provider': self.config.ai_provider.provider,
                     'resumed_from': workflow_id
-                }
+                },
+                generated_reports=final_state.generated_reports or {}
             )
             
             # Store in scan history
