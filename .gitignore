@@ -200,10 +200,12 @@ ehthumbs.db
 Thumbs.db
 
 # Test files
+test_*.py
 test_apps/
 sample_apps/
 *.apk
 *.ipa
+scan_*.log
 
 # Backup files
 *.bak
@@ -212,3 +214,11 @@ sample_apps/
 # Documentation builds
 docs/build/
 docs/_build/
+
+# Temporary PR/deployment docs
+DEPLOYMENT_SUCCESS.md
+GROK_TEST_RESULTS.md
+MERGE_SUCCESS.md
+PR_DESCRIPTION.md
+PULL_REQUEST.md
+QUICKSTART_GROK.md
