@@ -549,6 +549,228 @@ Create a professional executive summary (200-300 words).""")
             logger.error(f"Executive summary generation failed: {e}")
             return self._create_fallback_summary(counts, key_findings)
     
+    def generate_countermeasures(self, categorized_vulns: Dict[str, List[VulnerabilityAnalysis]], 
+                                app_context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Generate comprehensive countermeasures and action plan using AI
+        
+        Args:
+            categorized_vulns: Categorized vulnerabilities
+            app_context: Application context information
+            
+        Returns:
+            Dict containing countermeasures, action plan, and implementation timeline
+        """
+        logger.info("Generating AI-powered countermeasures and action plan")
+        
+        try:
+            # Count vulnerabilities by severity
+            counts = {
+                'critical': len(categorized_vulns.get('Critical', [])),
+                'high': len(categorized_vulns.get('High', [])),
+                'medium': len(categorized_vulns.get('Medium', [])),
+                'low': len(categorized_vulns.get('Low', []))
+            }
+            
+            # Prepare vulnerability summaries for AI analysis
+            vulnerability_summaries = []
+            for severity, vulns in categorized_vulns.items():
+                for vuln in vulns[:5]:  # Top 5 per category to avoid token limits
+                    vulnerability_summaries.append({
+                        'severity': severity,
+                        'title': vuln.title,
+                        'category': vuln.priority.category.value,
+                        'description': vuln.description[:200],  # Truncate for token efficiency
+                        'remediation_steps': vuln.remediation_steps[:3]  # Top 3 steps
+                    })
+            
+            # Create countermeasures prompt
+            countermeasures_prompt = ChatPromptTemplate.from_template(
+                """You are a senior mobile application security expert tasked with creating comprehensive countermeasures and an action plan for identified vulnerabilities.
+
+VULNERABILITY ANALYSIS:
+Security Score: Based on {critical} critical, {high} high, {medium} medium, and {low} low severity vulnerabilities.
+
+APP CONTEXT:
+- App Name: {app_name}
+- Platform: {platform}
+- File: {file_name}
+
+TOP VULNERABILITIES:
+{vulnerability_details}
+
+Your task is to create a comprehensive response including:
+
+1. **IMMEDIATE ACTIONS** (0-7 days): Critical fixes that must be implemented immediately
+2. **SHORT-TERM ACTIONS** (1-4 weeks): High-priority security improvements  
+3. **MEDIUM-TERM ACTIONS** (1-3 months): Medium-priority security enhancements
+4. **LONG-TERM ACTIONS** (3-6 months): Low-priority improvements and security hardening
+5. **SECURITY BEST PRACTICES**: General recommendations for ongoing security
+6. **IMPLEMENTATION PRIORITIES**: Risk-based prioritization of all countermeasures
+7. **COMPLIANCE CONSIDERATIONS**: Relevant security standards and regulations
+8. **MONITORING & VALIDATION**: How to verify fixes and monitor for new threats
+
+For each action item, provide:
+- Specific technical steps
+- Estimated effort (hours/days)  
+- Required resources/skills
+- Risk reduction impact
+- Implementation complexity (Low/Medium/High)
+
+Return the response as a well-structured JSON object with the following structure:
+{{
+    "immediate_actions": [
+        {{
+            "title": "Action title",
+            "description": "Detailed description",
+            "steps": ["Step 1", "Step 2"],
+            "effort_estimate": "X hours/days",
+            "complexity": "Low/Medium/High",
+            "risk_reduction": "High/Medium/Low",
+            "priority": 1
+        }}
+    ],
+    "short_term_actions": [...],
+    "medium_term_actions": [...], 
+    "long_term_actions": [...],
+    "security_best_practices": [
+        {{
+            "category": "Category name",
+            "recommendations": ["Recommendation 1", "Recommendation 2"]
+        }}
+    ],
+    "implementation_timeline": {{
+        "week_1": ["Immediate action 1", "Immediate action 2"],
+        "month_1": ["Short-term action 1"],
+        "month_3": ["Medium-term action 1"],
+        "month_6": ["Long-term action 1"]
+    }},
+    "compliance_notes": [
+        "OWASP Mobile Top 10 compliance note",
+        "GDPR/privacy consideration",
+        "Platform-specific security requirement"
+    ],
+    "monitoring_validation": [
+        "Validation step 1",
+        "Monitoring recommendation 1"
+    ]
+}}"""
+            )
+            
+            # Format vulnerability details
+            vuln_details = []
+            for vuln in vulnerability_summaries:
+                steps_text = ", ".join(vuln['remediation_steps']) if vuln['remediation_steps'] else "No specific steps provided"
+                vuln_details.append(
+                    f"- [{vuln['severity']}] {vuln['title']} ({vuln['category']}): {vuln['description']}... "
+                    f"Remediation: {steps_text}"
+                )
+            
+            vulnerability_details_text = "\n".join(vuln_details) if vuln_details else "No specific vulnerabilities detailed"
+            
+            # Get app context
+            app_name = app_context.get('app_name', 'Unknown App') if app_context else 'Unknown App'
+            platform = app_context.get('platform', 'Mobile') if app_context else 'Mobile'
+            file_name = app_context.get('file_name', 'Unknown') if app_context else 'Unknown'
+            
+            # Generate countermeasures using AI
+            chain = countermeasures_prompt | self.llm | JsonOutputParser()
+            
+            result = chain.invoke({
+                "critical": counts['critical'],
+                "high": counts['high'],
+                "medium": counts['medium'],
+                "low": counts['low'],
+                "app_name": app_name,
+                "platform": platform,
+                "file_name": file_name,
+                "vulnerability_details": vulnerability_details_text
+            })
+            
+            # Add metadata
+            result["generation_metadata"] = {
+                "timestamp": datetime.now().isoformat(),
+                "total_vulnerabilities_analyzed": sum(counts.values()),
+                "ai_model": str(self.llm),
+                "analysis_scope": "Comprehensive countermeasures and action plan"
+            }
+            
+            logger.info(f"Generated countermeasures with {len(result.get('immediate_actions', []))} immediate actions")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Countermeasures generation failed: {e}")
+            # Return fallback countermeasures
+            return self._create_fallback_countermeasures(counts, app_context)
+    
+    def _create_fallback_countermeasures(self, counts: Dict[str, int], app_context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Create fallback countermeasures when AI processing fails"""
+        return {
+            "immediate_actions": [
+                {
+                    "title": "Manual Security Review Required",
+                    "description": "AI countermeasures generation failed. Conduct immediate manual security review.",
+                    "steps": [
+                        "Review all critical vulnerabilities manually",
+                        "Consult security expert",
+                        "Implement critical fixes immediately"
+                    ],
+                    "effort_estimate": "2-5 days",
+                    "complexity": "High",
+                    "risk_reduction": "High",
+                    "priority": 1
+                }
+            ],
+            "short_term_actions": [
+                {
+                    "title": "Comprehensive Security Assessment",
+                    "description": "Conduct thorough security assessment to identify all vulnerabilities",
+                    "steps": [
+                        "Perform penetration testing",
+                        "Code security review",
+                        "Update security policies"
+                    ],
+                    "effort_estimate": "1-2 weeks",
+                    "complexity": "Medium",
+                    "risk_reduction": "High",
+                    "priority": 2
+                }
+            ],
+            "medium_term_actions": [],
+            "long_term_actions": [],
+            "security_best_practices": [
+                {
+                    "category": "General Security",
+                    "recommendations": [
+                        "Implement secure coding practices",
+                        "Regular security assessments",
+                        "Keep dependencies updated"
+                    ]
+                }
+            ],
+            "implementation_timeline": {
+                "week_1": ["Manual Security Review Required"],
+                "month_1": ["Comprehensive Security Assessment"],
+                "month_3": [],
+                "month_6": []
+            },
+            "compliance_notes": [
+                "Follow OWASP Mobile Top 10 guidelines",
+                "Ensure compliance with relevant data protection regulations"
+            ],
+            "monitoring_validation": [
+                "Regular security scans",
+                "Penetration testing",
+                "Code review processes"
+            ],
+            "generation_metadata": {
+                "timestamp": datetime.now().isoformat(),
+                "total_vulnerabilities_analyzed": sum(counts.values()),
+                "fallback_reason": "AI generation failed",
+                "analysis_scope": "Fallback countermeasures"
+            }
+        }
+    
     def _create_fallback_analysis(self, vulnerability: Dict[str, Any], errors: List[str]) -> VulnerabilityAnalysis:
         """Create fallback analysis when AI processing fails"""
         priority = VulnerabilityPriority(
