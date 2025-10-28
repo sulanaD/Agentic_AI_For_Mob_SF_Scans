@@ -67,7 +67,8 @@ class SecurityReportGenerator:
                            app_info: Dict[str, Any],
                            categorized_vulnerabilities: Dict[str, List[VulnerabilityAnalysis]],
                            executive_summary: str,
-                           scan_stats: Dict[str, Any]) -> Dict[str, Any]:
+                           scan_stats: Dict[str, Any],
+                           countermeasures: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Prepare report data for template rendering
         
@@ -76,6 +77,7 @@ class SecurityReportGenerator:
             categorized_vulnerabilities (Dict[str, List[VulnerabilityAnalysis]]): Categorized vulnerabilities
             executive_summary (str): Executive summary text
             scan_stats (Dict[str, Any]): Scan statistics
+            countermeasures (Dict[str, Any]): AI-generated countermeasures and action plan
             
         Returns:
             Dict[str, Any]: Complete report data
@@ -113,6 +115,7 @@ class SecurityReportGenerator:
             'report_date': current_time.strftime('%Y-%m-%d %H:%M:%S'),
             'executive_summary': executive_summary,
             'vulnerabilities': template_vulnerabilities,
+            'countermeasures': countermeasures,
             'stats': scan_stats,
             'total_vulnerabilities': sum(len(vulns) for vulns in categorized_vulnerabilities.values()),
             'metadata': {
@@ -380,6 +383,7 @@ class SecurityReportGenerator:
                            categorized_vulnerabilities: Dict[str, List[VulnerabilityAnalysis]],
                            executive_summary: str,
                            scan_stats: Dict[str, Any],
+                           countermeasures: Dict[str, Any] = None,
                            formats: List[str] = None) -> Dict[str, str]:
         """
         Generate reports in multiple formats
@@ -389,6 +393,7 @@ class SecurityReportGenerator:
             categorized_vulnerabilities (Dict[str, List[VulnerabilityAnalysis]]): Categorized vulnerabilities
             executive_summary (str): Executive summary text
             scan_stats (Dict[str, Any]): Scan statistics
+            countermeasures (Dict[str, Any]): AI-generated countermeasures and action plan
             formats (List[str]): Report formats to generate ('html', 'pdf', 'json')
             
         Returns:
@@ -404,7 +409,8 @@ class SecurityReportGenerator:
             app_info,
             categorized_vulnerabilities,
             executive_summary,
-            scan_stats
+            scan_stats,
+            countermeasures
         )
         
         generated_reports = {}

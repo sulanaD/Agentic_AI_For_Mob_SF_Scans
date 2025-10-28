@@ -310,22 +310,29 @@ class SecurityAnalysisWorkflow:
             logger.info("Generating countermeasures and action plan")
             state["current_step"] = "generate_countermeasures"
             
-            analyses = state.get("vulnerability_analyses", [])
+            categorized_vulns = state.get("categorized_vulnerabilities", {})
             
-            if not analyses:
-                state["warnings"].append("No vulnerability analyses available for countermeasures")
+            if not categorized_vulns:
+                state["warnings"].append("No categorized vulnerabilities available for countermeasures")
                 state["countermeasures"] = None
                 return state
             
             try:
+                # Prepare app context for countermeasures
+                app_context = {
+                    "app_name": state.get("app_info", {}).get("app_name", "Unknown App"),
+                    "platform": state.get("app_info", {}).get("platform", "Mobile"),
+                    "file_name": state.get("app_file_path", "Unknown").split("/")[-1]
+                }
+                
                 # Generate countermeasures using AI
                 countermeasures = self.ai_analyzer.generate_countermeasures(
-                    vulnerability_analyses=analyses,
-                    app_context=state["app_info"]
+                    categorized_vulns, 
+                    app_context
                 )
                 
                 state["countermeasures"] = countermeasures
-                logger.info("Countermeasures and action plan generated successfully")
+                logger.info(f"Generated countermeasures with {len(countermeasures.get('immediate_actions', []))} immediate actions")
                 
             except Exception as e:
                 error_msg = f"Countermeasures generation failed: {str(e)}"
@@ -352,7 +359,7 @@ class SecurityAnalysisWorkflow:
                     categorized_vulnerabilities=state.get("categorized_vulnerabilities", {}),
                     executive_summary=state.get("executive_summary", ""),
                     scan_stats=statistics,
-                    countermeasures=state.get("countermeasures"),  # Include countermeasures
+                    countermeasures=state.get("countermeasures"),
                     formats=state["config"].get("report_formats", ["html", "json"])
                 )
                 
