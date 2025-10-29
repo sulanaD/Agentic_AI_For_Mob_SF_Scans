@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -261,10 +262,32 @@ async def list_scans():
                 "status": data["status"],
                 "filename": data["filename"],
                 "app_name": data["app_name"],
-                "progress": data.get("progress", 0)
+                "progress": data.get("progress", 0),
+                "message": data.get("message", "")
             }
             for scan_id, data in active_scans.items()
         ]
+    }
+
+
+# Get Individual Scan Results
+@app.get("/scans/{scan_id}")
+async def get_scan_results(scan_id: str):
+    """Get detailed results for a specific scan"""
+    if scan_id not in active_scans:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    
+    scan_data = active_scans[scan_id]
+    
+    return {
+        "scan_id": scan_id,
+        "status": scan_data["status"],
+        "progress": scan_data.get("progress", 0),
+        "message": scan_data.get("message", ""),
+        "filename": scan_data.get("filename", ""),
+        "app_name": scan_data.get("app_name", ""),
+        "results": scan_data.get("results", None),
+        "error": scan_data.get("error", None)
     }
 
 
@@ -294,8 +317,38 @@ async def process_scan_background(
     include_ai_analysis: bool = True
 ):
     """
-    Background task to process mobile app scan using the proven MobileSecurityAgent
+    Background task to process mobile app scan with simplified MobSF workflow
     """
+    try:
+        # Add overall timeout to prevent infinite hanging
+        await asyncio.wait_for(
+            _perform_scan_with_timeout(scan_id, file, app_name, include_ai_analysis),
+            timeout=300.0  # 5 minute total timeout
+        )
+    except asyncio.TimeoutError:
+        print(f"❌ Overall scan timeout after 5 minutes for {scan_id}")
+        active_scans[scan_id].update({
+            "status": "failed",
+            "progress": 0,
+            "message": "Scan timed out after 5 minutes",
+            "error": "Overall scan timeout"
+        })
+    except Exception as e:
+        print(f"❌ Scan {scan_id} failed: {e}")
+        active_scans[scan_id].update({
+            "status": "failed",
+            "progress": 0,
+            "message": f"Scan failed: {str(e)}",
+            "error": str(e)
+        })
+
+
+async def _perform_scan_with_timeout(
+    scan_id: str, 
+    file: UploadFile, 
+    app_name: str, 
+    include_ai_analysis: bool = True
+):
     try:
         # Update status to processing
         active_scans[scan_id].update({
@@ -315,35 +368,153 @@ async def process_scan_background(
         try:
             # Update status
             active_scans[scan_id].update({
-                "progress": 30,
-                "message": "Starting security analysis with MobileSecurityAgent"
+                "progress": 20,
+                "message": "Uploading file to MobSF for analysis"
             })
             
-            # Change to src directory context for the scan
-            original_cwd = os.getcwd()
-            src_dir = os.path.join(os.path.dirname(__file__), 'src')
-            os.chdir(src_dir)
+            # Step 1: Upload file to MobSF
+            print(f"📤 Step 1: Uploading {file.filename} to MobSF...")
+            mobsf_client = security_agent.mobsf_client
+            upload_result = mobsf_client.upload_file(temp_file_path)
+            file_hash = upload_result.get('hash')
             
-            try:
-                # Use the proven MobileSecurityAgent to perform the scan
-                scan_results = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    security_agent.scan_mobile_app,
-                    temp_file_path,
-                    app_name
-                )
-                
-                # Update status with successful results
+            if not file_hash:
+                raise Exception("Failed to upload file to MobSF - no hash returned")
+            
+            print(f"✅ File uploaded to MobSF with hash: {file_hash}")
+            
+            # Update status
+            active_scans[scan_id].update({
+                "progress": 50,
+                "message": f"File uploaded to MobSF (hash: {file_hash[:8]}...)"
+            })
+            
+            # Step 2: Get scan results from MobSF report_json endpoint
+            print(f"📊 Step 2: Retrieving scan results from MobSF...")
+            active_scans[scan_id].update({
+                "progress": 70,
+                "message": "Retrieving scan results from MobSF"
+            })
+            
+            # Wait a moment for MobSF to process then get results
+            import time
+            time.sleep(2)  # Give MobSF a moment to process
+            scan_results = mobsf_client.get_scan_results(file_hash)
+            
+            if scan_results.get('report') == 'Report not Found':
+                # Wait a bit more and try again
+                print("⏳ MobSF still processing, waiting 10 seconds...")
+                time.sleep(10)
+                scan_results = mobsf_client.get_scan_results(file_hash)
+            
+            if scan_results.get('report') == 'Report not Found':
+                print("⚠️ MobSF scan may have failed or is taking too long")
                 active_scans[scan_id].update({
                     "status": "completed",
-                    "progress": 100,
-                    "message": "Scan completed successfully",
-                    "results": scan_results
+                    "progress": 90,
+                    "message": "MobSF scan completed but report not available",
+                    "results": {"error": "Report not found", "mobsf_response": scan_results}
+                })
+                return
+            
+            print(f"✅ Retrieved scan results from MobSF ({len(str(scan_results))} bytes)")
+            
+            # Step 3: Parse through AI (if requested)
+            if include_ai_analysis and 'error' not in scan_results:
+                active_scans[scan_id].update({
+                    "progress": 85,
+                    "message": "Analyzing results with AI for countermeasures"
                 })
                 
-            finally:
-                # Always return to original directory
-                os.chdir(original_cwd)
+                print(f"🤖 Step 3: Analyzing with AI...")
+                try:
+                    # Extract vulnerabilities from MobSF scan results
+                    vulnerabilities = []
+                    
+                    # Extract high severity findings
+                    if 'appsec' in scan_results and 'high' in scan_results['appsec']:
+                        for vuln in scan_results['appsec']['high']:
+                            vulnerabilities.append({
+                                'title': vuln.get('title', 'High Severity Finding'),
+                                'description': vuln.get('description', ''),
+                                'severity': 'High',
+                                'section': vuln.get('section', ''),
+                                'type': 'security'
+                            })
+                    
+                    # Extract warning level findings
+                    if 'appsec' in scan_results and 'warning' in scan_results['appsec']:
+                        for vuln in scan_results['appsec']['warning']:
+                            vulnerabilities.append({
+                                'title': vuln.get('title', 'Warning Level Finding'),
+                                'description': vuln.get('description', ''),
+                                'severity': 'Medium',
+                                'section': vuln.get('section', ''),
+                                'type': 'warning'
+                            })
+                    
+                    # If we have vulnerabilities, analyze them
+                    if vulnerabilities:
+                        ai_analysis = await asyncio.wait_for(
+                            asyncio.get_event_loop().run_in_executor(
+                                None,
+                                security_agent.ai_analyzer.analyze_vulnerability_batch,
+                                vulnerabilities[:5]  # Limit to first 5 for performance
+                            ),
+                            timeout=60.0  # 60 second timeout for AI analysis
+                        )
+                    else:
+                        ai_analysis = {"message": "No significant vulnerabilities found for AI analysis"}
+                    
+                    # Combine MobSF results with AI analysis
+                    final_results = {
+                        "mobsf_scan": scan_results,
+                        "ai_analysis": ai_analysis,
+                        "file_hash": file_hash,
+                        "app_name": app_name,
+                        "scan_timestamp": datetime.now().isoformat()
+                    }
+                    print(f"✅ AI analysis completed")
+                    
+                except asyncio.TimeoutError:
+                    print(f"⚠️ AI analysis timed out after 60 seconds")
+                    # Return MobSF results even if AI times out
+                    final_results = {
+                        "mobsf_scan": scan_results,
+                        "ai_analysis_error": "AI analysis timed out after 60 seconds",
+                        "file_hash": file_hash,
+                        "app_name": app_name,
+                        "scan_timestamp": datetime.now().isoformat()
+                    }
+                except Exception as ai_error:
+                    print(f"⚠️ AI analysis failed: {ai_error}")
+                    # Return MobSF results even if AI fails
+                    final_results = {
+                        "mobsf_scan": scan_results,
+                        "ai_analysis_error": str(ai_error),
+                        "file_hash": file_hash,
+                        "app_name": app_name,
+                        "scan_timestamp": datetime.now().isoformat()
+                    }
+            else:
+                print(f"⏭️ Skipping AI analysis (include_ai_analysis={include_ai_analysis})")
+                # Return just MobSF results
+                final_results = {
+                    "mobsf_scan": scan_results,
+                    "file_hash": file_hash,
+                    "app_name": app_name,
+                    "scan_timestamp": datetime.now().isoformat()
+                }
+            
+            # Update status with successful results
+            active_scans[scan_id].update({
+                "status": "completed",
+                "progress": 100,
+                "message": "Scan completed successfully",
+                "results": final_results
+            })
+            
+            print(f"🎉 Scan completed successfully for {app_name}")
                 
         finally:
             # Clean up temporary file
