@@ -128,46 +128,68 @@ class MobSFClient:
         logger.info(f"Scan started successfully for hash: {file_hash}")
         return result
     
-    def wait_for_scan_completion(self, file_hash: str, timeout: int = 1800, 
-                               poll_interval: int = 5) -> bool:
+    def wait_for_scan_completion(self, file_hash: str, timeout: int = 300, 
+                               poll_interval: int = 10) -> bool:
         """
         Wait for scan to complete by trying to fetch results
         
         Args:
             file_hash (str): Hash of the file being scanned
-            timeout (int): Maximum wait time in seconds (default: 30 minutes)
-            poll_interval (int): Polling interval in seconds (default: 5 seconds)
+            timeout (int): Maximum wait time in seconds (default: 5 minutes)
+            poll_interval (int): Polling interval in seconds (default: 10 seconds)
             
         Returns:
             bool: True if scan completed successfully, False if timeout
         """
-        logger.info(f"Waiting for scan completion (timeout: {timeout}s)")
+        logger.info(f"Waiting for scan completion (timeout: {timeout}s, interval: {poll_interval}s)")
         start_time = time.time()
+        attempt = 0
+        max_attempts = timeout // poll_interval
         
-        while time.time() - start_time < timeout:
+        while time.time() - start_time < timeout and attempt < max_attempts:
+            attempt += 1
+            elapsed = int(time.time() - start_time)
+            
+            logger.info(f"Checking scan status - attempt {attempt}/{max_attempts} (elapsed: {elapsed}s)")
+            
             try:
                 # Try to get scan results - if successful, scan is complete
                 result = self.get_scan_results(file_hash)
                 
                 # Check if this is a valid report (not just "Report not Found")
                 if result and isinstance(result, dict):
-                    # If we get "Report not Found" or similar error message, scan is not ready
-                    if result.get('report') == 'Report not Found' or 'error' in result:
-                        logger.debug(f"Scan still in progress, waiting {poll_interval}s...")
+                    # If we get "Report not Found", scan is still in progress
+                    if result.get('report') == 'Report not Found':
+                        logger.info(f"Scan still in progress, waiting {poll_interval}s... (attempt {attempt})")
                         time.sleep(poll_interval)
                         continue
                     
-                    # If we have file_name or other scan data, scan is complete
-                    if 'file_name' in result or 'app_name' in result:
-                        logger.info("Scan completed successfully")
+                    # If we get an error message, something went wrong
+                    if 'error' in result:
+                        logger.warning(f"Scan error detected: {result.get('error')}")
+                        time.sleep(poll_interval)
+                        continue
+                        
+                    # If we have substantial scan data, scan is complete
+                    if ('file_name' in result or 'app_name' in result or 
+                        'static_analysis' in result or 'permissions' in result or
+                        len(str(result)) > 1000):
+                        logger.info(f"Scan completed successfully after {elapsed}s and {attempt} attempts")
                         return True
                     
+                    # If result is too small, might still be processing
+                    logger.info(f"Received minimal data ({len(str(result))} bytes), continuing to wait...")
+                    
+                else:
+                    logger.warning(f"Received invalid result: {type(result)}")
+                    
             except Exception as e:
-                logger.debug(f"Scan still in progress: {e}")
-                time.sleep(poll_interval)
-                continue
+                logger.warning(f"Exception while checking scan status: {e}")
+                
+            logger.info(f"Waiting {poll_interval}s before next attempt...")
+            time.sleep(poll_interval)
         
-        logger.error(f"Scan timeout after {timeout} seconds")
+        logger.error(f"Scan timeout after {elapsed}s and {attempt} attempts")
         return False
     
     def get_scan_results(self, file_hash: str, report_type: str = 'json') -> Dict[str, Any]:
@@ -193,12 +215,12 @@ class MobSFClient:
         url = f"{self.api_url}/api/v1/report_json"
         
         try:
-            response = self.session.post(url, data=data)
+            response = self.session.post(url, data=data, timeout=15)
             result = response.json()
             
             # If report is not found, return the message without raising error
             if result.get('report') == 'Report not Found':
-                logger.debug("Report not found - scan may still be in progress")
+                logger.info("Report not found - scan may still be in progress")
                 return result
             
             # For other errors, raise
@@ -207,6 +229,9 @@ class MobSFClient:
             logger.info(f"Retrieved scan results ({len(str(result))} bytes)")
             return result
             
+        except requests.exceptions.Timeout as e:
+            logger.warning(f"Timeout retrieving scan results (15s): {e}")
+            return {"report": "Report not Found"}
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to retrieve scan results: {e}")
             raise MobSFAPIError(f"Failed to retrieve scan results: {e}")
@@ -244,14 +269,14 @@ class MobSFClient:
         return response.json()
     
     def perform_complete_scan(self, file_path: str, scan_type: str = None, 
-                            timeout: int = 1800) -> Tuple[str, Dict[str, Any]]:
+                            timeout: int = 300) -> Tuple[str, Dict[str, Any]]:
         """
-        Perform complete scan workflow: upload, scan, wait, and retrieve results
+        Perform complete scan workflow: upload and retrieve results
         
         Args:
             file_path (str): Path to mobile app file
             scan_type (str): Scan type ('apk' or 'ipa'), auto-detected if None
-            timeout (int): Maximum wait time for scan completion
+            timeout (int): Maximum wait time for scan completion (default: 5 minutes)
             
         Returns:
             Tuple[str, Dict[str, Any]]: File hash and complete scan results
@@ -273,17 +298,46 @@ class MobSFClient:
         if not file_hash:
             raise MobSFAPIError("Failed to get file hash from upload response")
         
-        logger.info("Upload successful, scan started automatically by MobSF")
+        logger.info(f"Upload successful for hash: {file_hash}, MobSF will process automatically")
         
-        # Step 2: Wait for scan completion
-        if not self.wait_for_scan_completion(file_hash, timeout):
-            raise MobSFAPIError("Scan did not complete within timeout period")
+        # Step 2: Simple wait and retry mechanism with exponential backoff
+        import time
+        max_attempts = 20
+        base_delay = 2
         
-        # Step 3: Get results
-        results = self.get_scan_results(file_hash)
+        for attempt in range(max_attempts):
+            try:
+                logger.info(f"Attempt {attempt + 1}/{max_attempts}: Getting scan results for {file_hash}")
+                
+                # Try to get results directly
+                results = self.get_scan_results(file_hash)
+                
+                # If we get "Report not Found", MobSF is still processing
+                if isinstance(results, dict) and results.get('report') == 'Report not Found':
+                    wait_time = min(base_delay * (2 ** min(attempt, 4)), 30)  # Cap at 30 seconds
+                    logger.info(f"Scan still processing, waiting {wait_time} seconds...")
+                    time.sleep(wait_time)
+                    continue
+                
+                # If we have actual results (check for typical MobSF response fields)
+                if (isinstance(results, dict) and 
+                    ('file_name' in results or 'app_name' in results or 
+                     'static_analysis' in results or len(str(results)) > 200)):
+                    logger.info("Complete scan workflow finished successfully")
+                    return file_hash, results
+                
+                # If results seem incomplete, wait and retry
+                wait_time = min(base_delay * (2 ** min(attempt, 4)), 30)
+                logger.debug(f"Results incomplete, waiting {wait_time} seconds...")
+                time.sleep(wait_time)
+                
+            except Exception as e:
+                wait_time = min(base_delay * (2 ** min(attempt, 4)), 30)
+                logger.warning(f"Error getting results (attempt {attempt + 1}): {e}, retrying in {wait_time}s")
+                time.sleep(wait_time)
         
-        logger.info("Complete scan workflow finished successfully")
-        return file_hash, results
+        # If we get here, all attempts failed
+        raise MobSFAPIError(f"Scan did not complete successfully after {max_attempts} attempts")
 
 
 def create_mobsf_client(api_url: str = None, api_key: str = None) -> MobSFClient:

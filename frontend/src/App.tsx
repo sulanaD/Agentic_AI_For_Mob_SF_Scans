@@ -9,6 +9,53 @@ interface ScanResponse {
   message: string;
 }
 
+interface VulnerabilityPriority {
+  severity: string;
+  priority_score: number;
+  confidence: number;
+  reasoning: string;
+  category: string;
+  exploitability: string;
+  business_impact: string;
+}
+
+interface TechnicalDetails {
+  title: string;
+  description: string;
+  severity: string;
+  section: string;
+  type: string;
+}
+
+interface AIAnalysis {
+  vulnerability_id: string;
+  title: string;
+  description: string;
+  priority: VulnerabilityPriority;
+  impact_assessment: string;
+  remediation_steps: string[];
+  references: string[];
+  cwe_mapping: string | null;
+  owasp_mapping: string | null;
+  technical_details: TechnicalDetails;
+}
+
+interface ScanResults {
+  scan_id: string;
+  status: string;
+  progress?: number;
+  message?: string;
+  filename?: string;
+  app_name?: string;
+  results?: any;
+  ai_analysis?: AIAnalysis[];
+  security_score?: number;
+  file_hash?: string;
+  scan_timestamp?: string;
+  error?: string;
+  [key: string]: any;
+}
+
 interface ScanStatus {
   scan_id: string;
   status: string;
@@ -47,6 +94,8 @@ function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [config, setConfig] = useState<ConfigResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'upload' | 'scans' | 'status'>('upload');
+  const [selectedScanResults, setSelectedScanResults] = useState<ScanResults | null>(null);
+  const [showResultsModal, setShowResultsModal] = useState<boolean>(false);
 
   // Fetch health and config on component mount
   useEffect(() => {
@@ -146,24 +195,37 @@ function App() {
 
   const viewScanResults = async (scanId: string) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/scan/${scanId}/results`);
-      
-      // Open results in a new window or modal
-      const resultsWindow = window.open('', '_blank');
-      if (resultsWindow) {
-        resultsWindow.document.write(`
-          <html>
-            <head><title>Scan Results - ${scanId}</title></head>
-            <body>
-              <h1>Scan Results</h1>
-              <pre>${JSON.stringify(response.data, null, 2)}</pre>
-            </body>
-          </html>
-        `);
-      }
+      const response = await axios.get<ScanResults>(`${API_BASE_URL}/scans/${scanId}`);
+      setSelectedScanResults(response.data);
+      setShowResultsModal(true);
     } catch (error) {
       console.error('Error fetching scan results:', error);
       alert('Error fetching scan results');
+    }
+  };
+
+  const closeResultsModal = () => {
+    setShowResultsModal(false);
+    setSelectedScanResults(null);
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity.toLowerCase()) {
+      case 'critical': return '#dc3545';
+      case 'high': return '#fd7e14';
+      case 'medium': return '#ffc107';
+      case 'low': return '#28a745';
+      default: return '#6c757d';
+    }
+  };
+
+  const getSeverityIcon = (severity: string) => {
+    switch (severity.toLowerCase()) {
+      case 'critical': return '🚨';
+      case 'high': return '⚠️';
+      case 'medium': return '⚡';
+      case 'low': return '💡';
+      default: return '🔍';
     }
   };
 
@@ -413,6 +475,165 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* AI Analysis Results Modal */}
+        {showResultsModal && selectedScanResults && (
+          <div className="modal-overlay" onClick={closeResultsModal}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>🔒 Security Analysis Results</h2>
+                <button className="close-btn" onClick={closeResultsModal}>✕</button>
+              </div>
+              
+              <div className="modal-body">
+                {/* Scan Overview */}
+                <div className="scan-overview">
+                  <div className="overview-card">
+                    <h3>📱 App Information</h3>
+                    <p><strong>App Name:</strong> {selectedScanResults.data?.app_name || 'Unknown'}</p>
+                    <p><strong>Scan ID:</strong> {selectedScanResults.scan_id}</p>
+                    <p><strong>File Hash:</strong> {selectedScanResults.data?.file_hash || 'N/A'}</p>
+                    <p><strong>Scan Date:</strong> {selectedScanResults.data?.scan_timestamp ? new Date(selectedScanResults.data.scan_timestamp).toLocaleString() : 'N/A'}</p>
+                  </div>
+                  
+                  {selectedScanResults.data?.security_score && (
+                    <div className="overview-card security-score">
+                      <h3>🛡️ Security Score</h3>
+                      <div className="score-display">
+                        <span className="score-number">{selectedScanResults.data.security_score}</span>
+                        <span className="score-total">/100</span>
+                      </div>
+                      <div className="score-bar">
+                        <div 
+                          className="score-fill"
+                          style={{ 
+                            width: `${selectedScanResults.data.security_score}%`,
+                            backgroundColor: selectedScanResults.data.security_score > 70 ? '#28a745' : 
+                                           selectedScanResults.data.security_score > 40 ? '#ffc107' : '#dc3545'
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Analysis Results */}
+                {selectedScanResults.ai_analysis && selectedScanResults.ai_analysis.length > 0 ? (
+                  <div className="ai-analysis-section">
+                    <h3>🤖 AI Security Analysis</h3>
+                    <p className="analysis-intro">
+                      Our AI has analyzed {selectedScanResults.ai_analysis.length} security vulnerabilities 
+                      and provided detailed assessments and remediation steps.
+                    </p>
+                    
+                    <div className="vulnerabilities-list">
+                      {selectedScanResults.ai_analysis.map((vulnerability: AIAnalysis, index: number) => (
+                        <div key={index} className="vulnerability-card">
+                          <div className="vulnerability-header">
+                            <div className="vulnerability-title">
+                              <span className="severity-icon">
+                                {getSeverityIcon(vulnerability.priority.severity)}
+                              </span>
+                              <h4>{vulnerability.title}</h4>
+                              <span 
+                                className="severity-badge"
+                                style={{ backgroundColor: getSeverityColor(vulnerability.priority.severity) }}
+                              >
+                                {vulnerability.priority.severity.toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="priority-info">
+                              <span className="priority-score">
+                                Priority: {(vulnerability.priority.priority_score * 100).toFixed(0)}%
+                              </span>
+                              <span className="confidence-score">
+                                Confidence: {(vulnerability.priority.confidence * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="vulnerability-content">
+                            <div className="vulnerability-description">
+                              <h5>📋 Description</h5>
+                              <p>{vulnerability.description}</p>
+                            </div>
+
+                            <div className="vulnerability-details">
+                              <div className="detail-section">
+                                <h5>🎯 Category & Impact</h5>
+                                <p><strong>Category:</strong> {vulnerability.priority.category}</p>
+                                <p><strong>Exploitability:</strong> {vulnerability.priority.exploitability}</p>
+                                <p><strong>Business Impact:</strong> {vulnerability.priority.business_impact}</p>
+                              </div>
+
+                              <div className="detail-section">
+                                <h5>🔍 Technical Details</h5>
+                                <p><strong>Section:</strong> {vulnerability.technical_details.section}</p>
+                                <p><strong>Type:</strong> {vulnerability.technical_details.type}</p>
+                              </div>
+                            </div>
+
+                            <div className="remediation-section">
+                              <h5>🛠️ Remediation Steps</h5>
+                              {vulnerability.remediation_steps && vulnerability.remediation_steps.length > 0 ? (
+                                <ol className="remediation-list">
+                                  {vulnerability.remediation_steps.map((step: string, stepIndex: number) => (
+                                    <li key={stepIndex}>{step}</li>
+                                  ))}
+                                </ol>
+                              ) : (
+                                <p className="no-remediation">Manual security review required</p>
+                              )}
+                            </div>
+
+                            <div className="impact-assessment">
+                              <h5>📊 Impact Assessment</h5>
+                              <p>{vulnerability.impact_assessment}</p>
+                            </div>
+
+                            {vulnerability.priority.reasoning && (
+                              <div className="ai-reasoning">
+                                <h5>🤖 AI Analysis</h5>
+                                <p className="reasoning-text">{vulnerability.priority.reasoning}</p>
+                              </div>
+                            )}
+
+                            {(vulnerability.cwe_mapping || vulnerability.owasp_mapping || 
+                              (vulnerability.references && vulnerability.references.length > 0)) && (
+                              <div className="references-section">
+                                <h5>📚 References</h5>
+                                {vulnerability.cwe_mapping && (
+                                  <p><strong>CWE:</strong> {vulnerability.cwe_mapping}</p>
+                                )}
+                                {vulnerability.owasp_mapping && (
+                                  <p><strong>OWASP:</strong> {vulnerability.owasp_mapping}</p>
+                                )}
+                                {vulnerability.references && vulnerability.references.length > 0 && (
+                                  <div className="reference-links">
+                                    {vulnerability.references.map((ref: string, refIndex: number) => (
+                                      <a key={refIndex} href={ref} target="_blank" rel="noopener noreferrer" className="reference-link">
+                                        🔗 {ref}
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="no-ai-analysis">
+                    <h3>🤖 AI Analysis</h3>
+                    <p>No AI analysis data available for this scan.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
