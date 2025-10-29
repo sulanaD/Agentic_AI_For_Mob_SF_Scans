@@ -13,9 +13,11 @@ interface ScanStatus {
   scan_id: string;
   status: string;
   progress?: number;
-  message: string;
+  message?: string;
   results?: any;
   error?: string;
+  filename?: string;
+  app_name?: string;
 }
 
 interface HealthResponse {
@@ -35,7 +37,7 @@ interface ConfigResponse {
   };
 }
 
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = 'http://localhost:8081';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
