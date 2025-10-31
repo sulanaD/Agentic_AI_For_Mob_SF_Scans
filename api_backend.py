@@ -2,6 +2,7 @@
 FastAPI Mobile Security Analysis Backend
 
 Integrates with the proven src/ components to provide a REST API for mobile app security scanning.
+Updated: Added debug logging to MobSF requests
 """
 
 import os
@@ -18,6 +19,25 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, s
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+# Force reload environment variables
+load_dotenv(override=True)
+
+# Clear any cached environment variables
+if 'MOBSF_API_KEY' in os.environ:
+    del os.environ['MOBSF_API_KEY']
+if 'GROQ_API_KEY' in os.environ:
+    del os.environ['GROQ_API_KEY']
+
+# Force reload with override
+load_dotenv('.env', override=True)
+load_dotenv('src/.env', override=True)
+
+# Load environment variables at module level
+MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
+# Note: MOBSF_API_KEY is read dynamically to support env changes
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 
 # Add src directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -136,7 +156,7 @@ async def health_check():
                 components["mobsf_client"] = "healthy"
             
             # Check if AI analyzer is available
-            if hasattr(security_agent, 'vulnerability_analyzer'):
+            if hasattr(security_agent, 'ai_analyzer'):
                 components["ai_analyzer"] = "healthy"
                 
         except Exception as e:
@@ -163,11 +183,61 @@ async def scan_mobile_app(
     """
     global security_agent
     
+    # Force correct API key from file before any MobSF operations
+    correct_api_key = None
+    try:
+        # Try to read the API key directly from .env file
+        env_paths = ['.env', 'src/.env', '../.env']
+        for env_path in env_paths:
+            try:
+                with open(env_path, 'r') as f:
+                    for line in f:
+                        if line.startswith('MOBSF_API_KEY='):
+                            correct_api_key = line.split('=', 1)[1].strip()
+                            break
+                if correct_api_key:
+                    break
+            except FileNotFoundError:
+                continue
+        
+        if correct_api_key:
+            os.environ['MOBSF_API_KEY'] = correct_api_key
+            # Update the client's API key directly
+            if security_agent and hasattr(security_agent, 'mobsf_client'):
+                security_agent.mobsf_client.update_api_key(correct_api_key)
+                print(f"🔑 Updated MobSF API key: {correct_api_key[:10]}...")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not update API key: {e}")
+    
     if not security_agent:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Security agent not initialized. Check health endpoint for details."
         )
+    
+    # Ensure we're using the current API key from environment
+    load_dotenv(override=True)
+    
+    # Force read from .env file and update environment
+    env_key = None
+    try:
+        with open('.env', 'r') as f:
+            for line in f:
+                if line.startswith('MOBSF_API_KEY='):
+                    env_key = line.split('=', 1)[1].strip()
+                    break
+    except Exception:
+        pass
+    
+    if env_key:
+        os.environ['MOBSF_API_KEY'] = env_key
+        current_api_key = env_key
+    else:
+        current_api_key = os.getenv('MOBSF_API_KEY')
+    
+    if current_api_key and security_agent.mobsf_client.api_key != current_api_key:
+        print(f"🔄 Updating MobSF API key: {current_api_key[:10]}...")
+        security_agent.mobsf_client.update_api_key(current_api_key)
     
     # Validate file type
     if not file.filename:
@@ -183,8 +253,45 @@ async def scan_mobile_app(
             detail="Only APK and IPA files are supported"
         )
     
-    # Generate unique scan ID
-    scan_id = str(uuid.uuid4())
+    # First, upload to MobSF to get the hash (which will be our scan_id)
+    # Create temporary file for initial upload
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
+        content = await file.read()
+        temp_file.write(content)
+        temp_file_path = temp_file.name
+    
+    try:
+        # Step 1: Upload to MobSF to get hash
+        mobsf_client = security_agent.mobsf_client
+        upload_result = mobsf_client.upload_file(temp_file_path)
+        mobsf_hash = upload_result.get('hash')
+        
+        if not mobsf_hash:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to upload file to MobSF - no hash returned"
+            )
+        
+        print(f"✅ File uploaded to MobSF, hash: {mobsf_hash}")
+        
+        # Step 2: Start scan with the hash
+        scan_type = 'apk' if file_ext == '.apk' else 'ipa'
+        scan_result = mobsf_client.start_scan(mobsf_hash, scan_type)
+        print(f"✅ Scan initiated for hash: {mobsf_hash}")
+        
+        # Use MobSF hash as scan_id for easier management
+        scan_id = mobsf_hash
+        
+    except Exception as e:
+        # Clean up temp file
+        Path(temp_file_path).unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to initiate scan: {str(e)}"
+        )
+    finally:
+        # Clean up temp file
+        Path(temp_file_path).unlink(missing_ok=True)
     
     # Initialize scan tracking
     active_scans[scan_id] = {
@@ -199,11 +306,11 @@ async def scan_mobile_app(
         "error": None
     }
     
-    # Start background scan processing
+    # Start background scan processing (file already uploaded, hash is scan_id)
     background_tasks.add_task(
         process_scan_background,
-        scan_id,
-        file,
+        scan_id,  # This is now the MobSF hash
+        file.filename,
         app_name or file.filename,
         include_ai_analysis
     )
@@ -291,6 +398,79 @@ async def get_scan_results(scan_id: str):
     }
 
 
+# Debug Endpoint
+@app.get("/debug-env")
+async def debug_environment():
+    """Debug endpoint to check environment variables"""
+    # Force reload environment
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    
+    # Read current values dynamically
+    current_mobsf_key = os.getenv('MOBSF_API_KEY')
+    
+    # Also read directly from .env file
+    env_file_content = ""
+    try:
+        with open('.env', 'r') as f:
+            for line in f:
+                if 'MOBSF_API_KEY' in line:
+                    env_file_content = line.strip()
+                    break
+    except Exception as e:
+        env_file_content = f"Error reading .env: {e}"
+    
+    return {
+        "mobsf_api_key_from_os": current_mobsf_key[:10] + "..." if current_mobsf_key else "NOT_SET",
+        "mobsf_api_key_from_file": env_file_content,
+        "mobsf_api_url": MOBSF_API_URL,
+        "groq_api_key": "SET" if GROQ_API_KEY else "NOT_SET"
+    }
+
+
+# Reload Security Agent Endpoint
+@app.post("/reload-agent")
+async def reload_security_agent():
+    """Reload the security agent with fresh environment variables"""
+    global security_agent, MOBSF_API_KEY, MOBSF_API_URL, GROQ_API_KEY
+    
+    try:
+        # Get correct API key from environment
+        correct_api_key = os.getenv('MOBSF_API_KEY_OVERRIDE') or os.getenv('MOBSF_API_KEY')
+        if correct_api_key:
+            os.environ['MOBSF_API_KEY'] = correct_api_key
+        
+        # Force reload environment variables at all levels
+        from dotenv import load_dotenv
+        load_dotenv('.env', override=True)
+        
+        # Update our module-level variables directly
+        MOBSF_API_KEY = correct_api_key
+        MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
+        GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+        
+        # Force reload in all related modules
+        from mobsf_client import reload_mobsf_environment
+        reload_mobsf_environment()
+        
+        # Recreate security agent 
+        security_agent = MobileSecurityAgent()
+        
+        return {
+            "status": "success", 
+            "message": "Security agent forcefully reloaded with correct API key",
+            "mobsf_api_key": (correct_api_key[:10] + "...") if correct_api_key else "NOT_SET"
+        }
+    except Exception as e:
+        print(f"[DEBUG] Error reloading agent: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "message": f"Failed to reload agent: {str(e)}"
+        }
+
+
 # Configuration Endpoint
 @app.get("/config")
 async def get_configuration():
@@ -300,8 +480,8 @@ async def get_configuration():
         "supported_formats": [".apk", ".ipa"],
         "max_file_size": "100MB",
         "features": {
-            "mobsf_scanning": bool(os.getenv("MOBSF_API_URL")),
-            "ai_analysis": bool(os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")),
+            "mobsf_scanning": bool(MOBSF_API_URL),
+            "ai_analysis": bool(GROQ_API_KEY or os.getenv("OPENAI_API_KEY")),
             "report_generation": True
         }
     }
@@ -311,18 +491,19 @@ async def get_configuration():
 
 # Background Processing Function
 async def process_scan_background(
-    scan_id: str, 
-    file: UploadFile, 
+    scan_id: str,  # This is now the MobSF hash 
+    filename: str,
     app_name: str, 
     include_ai_analysis: bool = True
 ):
     """
-    Background task to process mobile app scan with simplified MobSF workflow
+    Background task to process mobile app scan using MobSF hash
+    Since upload already happened, just poll for results and run AI analysis
     """
     try:
         # Add overall timeout to prevent infinite hanging
         await asyncio.wait_for(
-            _perform_scan_with_timeout(scan_id, file, app_name, include_ai_analysis),
+            _perform_scan_with_timeout(scan_id, filename, app_name, include_ai_analysis),
             timeout=300.0  # 5 minute total timeout
         )
     except asyncio.TimeoutError:
@@ -344,78 +525,58 @@ async def process_scan_background(
 
 
 async def _perform_scan_with_timeout(
-    scan_id: str, 
-    file: UploadFile, 
+    scan_id: str,  # This is now the MobSF hash
+    filename: str,
     app_name: str, 
     include_ai_analysis: bool = True
 ):
     try:
-        # Update status to processing
+        # Update status to processing 
         active_scans[scan_id].update({
             "status": "processing",
-            "progress": 10,
-            "message": "Saving uploaded file"
+            "progress": 50,
+            "message": f"File already uploaded to MobSF (hash: {scan_id[:8]}...)"
         })
         
-        # Create temporary file for processing
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as temp_file:
-            # Reset file pointer and read content
-            await file.seek(0)
-            content = await file.read()
-            temp_file.write(content)
-            temp_file_path = temp_file.name
+        # File is already uploaded to MobSF, scan_id IS the MobSF hash
+        file_hash = scan_id
+        print(f"✅ Using MobSF hash as scan ID: {file_hash}")
         
-        try:
-            # Update status
-            active_scans[scan_id].update({
-                "progress": 20,
-                "message": "Uploading file to MobSF for analysis"
-            })
-            
-            # Step 1: Upload file to MobSF
-            print(f"📤 Step 1: Uploading {file.filename} to MobSF...")
-            mobsf_client = security_agent.mobsf_client
-            upload_result = mobsf_client.upload_file(temp_file_path)
-            file_hash = upload_result.get('hash')
-            
-            if not file_hash:
-                raise Exception("Failed to upload file to MobSF - no hash returned")
-            
-            print(f"✅ File uploaded to MobSF with hash: {file_hash}")
-            
-            # Update status
-            active_scans[scan_id].update({
-                "progress": 50,
-                "message": f"File uploaded to MobSF (hash: {file_hash[:8]}...)"
-            })
-            
-            # Step 2: Get scan results from MobSF report_json endpoint
-            print(f"📊 Step 2: Retrieving scan results from MobSF...")
-            active_scans[scan_id].update({
-                "progress": 70,
-                "message": "Retrieving scan results from MobSF"
-            })
-            
-            # Wait a moment for MobSF to process then get results
-            import time
-            time.sleep(2)  # Give MobSF a moment to process
+        # Step 1: Get scan results from MobSF report_json endpoint
+        print(f"📊 Step 1: Retrieving scan results from MobSF...")
+        active_scans[scan_id].update({
+            "progress": 70,
+            "message": "Retrieving scan results from MobSF"
+        })
+        
+        # Poll for results with retry logic
+        mobsf_client = security_agent.mobsf_client
+        max_attempts = 20
+        attempt = 0
+        
+        while attempt < max_attempts:
+            attempt += 1
             scan_results = mobsf_client.get_scan_results(file_hash)
             
             if scan_results.get('report') == 'Report not Found':
-                # Wait a bit more and try again
-                print("⏳ MobSF still processing, waiting 10 seconds...")
-                time.sleep(10)
-                scan_results = mobsf_client.get_scan_results(file_hash)
-            
-            if scan_results.get('report') == 'Report not Found':
-                print("⚠️ MobSF scan may have failed or is taking too long")
-                active_scans[scan_id].update({
-                    "status": "completed",
-                    "progress": 90,
-                    "message": "MobSF scan completed but report not available",
-                    "results": {"error": "Report not found", "mobsf_response": scan_results}
-                })
-                return
+                if attempt < max_attempts:
+                    wait_time = min(5 + attempt, 15)  # Start at 5s, max 15s
+                    print(f"⏳ MobSF still processing, waiting {wait_time} seconds... (attempt {attempt}/{max_attempts})")
+                    active_scans[scan_id].update({
+                        "progress": 70 + (attempt * 2),  # Gradually increase progress
+                        "message": f"Waiting for MobSF scan completion (attempt {attempt}/{max_attempts})"
+                    })
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    print("⚠️ MobSF scan timed out or failed")
+                    active_scans[scan_id].update({
+                        "status": "completed",
+                        "progress": 90,
+                        "message": "MobSF scan completed but report not available",
+                        "results": {"error": "Report not found", "mobsf_response": scan_results}
+                    })
+                    return
             
             print(f"✅ Retrieved scan results from MobSF ({len(str(scan_results))} bytes)")
             
@@ -515,13 +676,6 @@ async def _perform_scan_with_timeout(
             })
             
             print(f"🎉 Scan completed successfully for {app_name}")
-                
-        finally:
-            # Clean up temporary file
-            try:
-                os.unlink(temp_file_path)
-            except OSError:
-                pass
                 
     except Exception as e:
         # Handle errors

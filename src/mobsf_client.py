@@ -12,8 +12,41 @@ import os
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables at module level
+load_dotenv(override=True)
+MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
+MOBSF_API_KEY = os.getenv('MOBSF_API_KEY')
 
 logger = logging.getLogger(__name__)
+
+
+def reload_mobsf_environment():
+    """Force reload MobSF environment variables from file"""
+    global MOBSF_API_URL, MOBSF_API_KEY
+    
+    # Clear cached environment variables
+    if 'MOBSF_API_KEY' in os.environ:
+        del os.environ['MOBSF_API_KEY']
+    if 'MOBSF_API_URL' in os.environ:
+        del os.environ['MOBSF_API_URL']
+    
+    # Force reload from .env files
+    from dotenv import load_dotenv
+    load_dotenv('./.env', override=True)
+    load_dotenv('../.env', override=True)
+    
+    # Also force from environment if set directly
+    MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
+    MOBSF_API_KEY = os.getenv('MOBSF_API_KEY')
+    
+    # If override is available, use it
+    if os.getenv('MOBSF_API_KEY_OVERRIDE'):
+        MOBSF_API_KEY = os.getenv('MOBSF_API_KEY_OVERRIDE')
+        os.environ['MOBSF_API_KEY'] = MOBSF_API_KEY
+    
+    logger.info(f"Reloaded MobSF environment: API_KEY = {MOBSF_API_KEY[:10] + '...' if MOBSF_API_KEY else 'NOT_SET'}")
 
 
 class MobSFAPIError(Exception):
@@ -38,9 +71,21 @@ class MobSFClient:
         self.api_key = api_key
         self.session = requests.Session()
         self.session.headers.update({
-            'Authorization': f'Bearer {api_key}',
-            'X-Mobsf-Api-Key': api_key
+            'Authorization': api_key
         })
+        
+    def update_api_key(self, new_api_key: str):
+        """
+        Update the API key for this client instance
+        
+        Args:
+            new_api_key (str): New MobSF API key
+        """
+        self.api_key = new_api_key
+        self.session.headers.update({
+            'Authorization': new_api_key
+        })
+        logger.info(f"Updated MobSF API key: {new_api_key[:10]}...")
         
     def _make_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
         """
@@ -64,42 +109,48 @@ class MobSFClient:
             kwargs['timeout'] = (30, 300)  # (connection timeout, read timeout)
         
         try:
+            print(f"🔍 MobSF request: {method} {url}")
+            print(f"🔍 Headers: {dict(self.session.headers)}")
             response = self.session.request(method, url, **kwargs)
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
             logger.error(f"MobSF API request failed: {e}")
+            print(f"❌ MobSF API request failed: {e}")
+            print(f"❌ Response status: {getattr(e.response, 'status_code', 'N/A')}")
+            print(f"❌ Response text: {getattr(e.response, 'text', 'N/A')[:200]}")
             raise MobSFAPIError(f"API request failed: {e}")
     
     def upload_file(self, file_path: str) -> Dict[str, Any]:
         """
-        Upload mobile application file to MobSF
+        Upload file to MobSF for analysis (upload only, does not start scan)
         
         Args:
-            file_path (str): Path to APK/IPA file
+            file_path (str): Path to the mobile app file
             
         Returns:
-            Dict[str, Any]: Upload response containing file hash and metadata
+            Dict[str, Any]: Upload response containing file hash
             
         Raises:
             MobSFAPIError: If upload fails
         """
-        if not os.path.exists(file_path):
+        if not Path(file_path).exists():
             raise MobSFAPIError(f"File not found: {file_path}")
-        
-        file_path_obj = Path(file_path)
-        if file_path_obj.suffix.lower() not in ['.apk', '.ipa']:
-            raise MobSFAPIError(f"Unsupported file type: {file_path_obj.suffix}")
         
         logger.info(f"Uploading file: {file_path}")
         
         with open(file_path, 'rb') as f:
-            files = {'file': (file_path_obj.name, f, 'application/octet-stream')}
+            files = {'file': (Path(file_path).name, f, 'application/octet-stream')}
+            
+            # Upload to MobSF - does NOT automatically start scan
             response = self._make_request('POST', '/api/v1/upload', files=files)
-        
-        result = response.json()
-        logger.info(f"File uploaded successfully. Hash: {result.get('hash', 'N/A')}")
-        return result
+            result = response.json()
+            
+            if 'hash' in result:
+                logger.info(f"Upload successful. Hash: {result['hash']}")
+                return result
+            else:
+                raise MobSFAPIError(f"Upload failed: {result}")
     
     def start_scan(self, file_hash: str, scan_type: str = 'apk') -> Dict[str, Any]:
         """
@@ -236,37 +287,8 @@ class MobSFClient:
             logger.error(f"Failed to retrieve scan results: {e}")
             raise MobSFAPIError(f"Failed to retrieve scan results: {e}")
     
-    def delete_scan(self, file_hash: str) -> Dict[str, Any]:
-        """
-        Delete scan and associated files
-        
-        Args:
-            file_hash (str): Hash of the file to delete
-            
-        Returns:
-            Dict[str, Any]: Deletion response
-        """
-        logger.info(f"Deleting scan for hash: {file_hash}")
-        
-        data = {'hash': file_hash}
-        response = self._make_request('POST', '/api/v1/delete_scan', data=data)
-        
-        logger.info(f"Scan deleted for hash: {file_hash}")
-        return response.json()
-    
-    def get_recent_scans(self, limit: int = 10) -> Dict[str, Any]:
-        """
-        Get list of recent scans
-        
-        Args:
-            limit (int): Maximum number of scans to retrieve
-            
-        Returns:
-            Dict[str, Any]: List of recent scans
-        """
-        params = {'limit': limit}
-        response = self._make_request('GET', '/api/v1/scans', params=params)
-        return response.json()
+    # Note: MobSF doesn't provide delete_scan or get_recent_scans endpoints
+    # These methods are removed as they don't exist in the actual API
     
     def perform_complete_scan(self, file_path: str, scan_type: str = None, 
                             timeout: int = 300) -> Tuple[str, Dict[str, Any]]:
@@ -291,17 +313,20 @@ class MobSFClient:
         
         logger.info(f"Starting complete scan workflow for: {file_path}")
         
-        # Step 1: Upload file (this automatically starts the scan in MobSF)
+        # Step 1: Upload file
         upload_result = self.upload_file(file_path)
         file_hash = upload_result.get('hash')
         
         if not file_hash:
             raise MobSFAPIError("Failed to get file hash from upload response")
         
-        logger.info(f"Upload successful for hash: {file_hash}, MobSF will process automatically")
+        logger.info(f"Upload successful, got hash: {file_hash}")
         
-        # Step 2: Simple wait and retry mechanism with exponential backoff
-        import time
+        # Step 2: Start scan with the hash
+        scan_result = self.start_scan(file_hash, scan_type)
+        logger.info(f"Scan initiated successfully")
+        
+        # Step 3: Wait for scan completion and get results
         max_attempts = 20
         base_delay = 2
         
@@ -309,10 +334,10 @@ class MobSFClient:
             try:
                 logger.info(f"Attempt {attempt + 1}/{max_attempts}: Getting scan results for {file_hash}")
                 
-                # Try to get results directly
+                # Try to get results
                 results = self.get_scan_results(file_hash)
                 
-                # If we get "Report not Found", MobSF is still processing
+                # If we get "Report not Found", scan is still processing
                 if isinstance(results, dict) and results.get('report') == 'Report not Found':
                     wait_time = min(base_delay * (2 ** min(attempt, 4)), 30)  # Cap at 30 seconds
                     logger.info(f"Scan still processing, waiting {wait_time} seconds...")
@@ -354,8 +379,8 @@ def create_mobsf_client(api_url: str = None, api_key: str = None) -> MobSFClient
     Raises:
         MobSFAPIError: If required configuration is missing
     """
-    api_url = api_url or os.getenv('MOBSF_API_URL')
-    api_key = api_key or os.getenv('MOBSF_API_KEY')
+    api_url = api_url or MOBSF_API_URL
+    api_key = api_key or MOBSF_API_KEY
     
     if not api_url:
         raise MobSFAPIError("MobSF API URL not provided (set MOBSF_API_URL environment variable)")
