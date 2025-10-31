@@ -101,6 +101,12 @@ class MobileSecurityAgent:
             self.config_manager = create_config_manager(config_file, env_file)
             self.config = self.config_manager.get_config()
             
+            # Force correct API key if needed
+            correct_api_key = os.getenv('MOBSF_API_KEY_OVERRIDE') or os.getenv('MOBSF_API_KEY')
+            if not self.config.mobsf.api_key or (correct_api_key and self.config.mobsf.api_key != correct_api_key):
+                logger.info(f"[DEBUG] Overriding API key from environment variable")
+                self.config.mobsf.api_key = correct_api_key
+            
             # Setup logging
             self.config_manager.setup_logging()
             
@@ -122,6 +128,10 @@ class MobileSecurityAgent:
         
         # Initialize components with new architecture
         try:
+            # Debug output for MobSF config
+            logger.info(f"[DEBUG] MobSF API URL: {self.config.mobsf.api_url}")
+            logger.info(f"[DEBUG] MobSF API Key: {self.config.mobsf.api_key[:10]}...")
+            
             # MobSF client
             self.mobsf_client = create_mobsf_client(
                 self.config.mobsf.api_url, 
