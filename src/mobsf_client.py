@@ -15,8 +15,13 @@ import logging
 from dotenv import load_dotenv
 
 # Load environment variables at module level
-load_dotenv(override=True)
-MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
+# In Kubernetes, prioritize environment variables over .env file
+if os.getenv('MOBSF_API_URL'):
+    MOBSF_API_URL = os.getenv('MOBSF_API_URL')
+else:
+    load_dotenv(override=False)
+    MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
+
 MOBSF_API_KEY = os.getenv('MOBSF_API_KEY')
 
 logger = logging.getLogger(__name__)
@@ -32,10 +37,10 @@ def reload_mobsf_environment():
     if 'MOBSF_API_URL' in os.environ:
         del os.environ['MOBSF_API_URL']
     
-    # Force reload from .env files
+    # Force reload from .env files but don't override K8s env vars
     from dotenv import load_dotenv
-    load_dotenv('./.env', override=True)
-    load_dotenv('../.env', override=True)
+    load_dotenv('./.env', override=False)
+    load_dotenv('../.env', override=False)
     
     # Also force from environment if set directly
     MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')

@@ -175,6 +175,7 @@ class LangChainVulnerabilityAnalyzer:
         """Create specialized LangChain chains for different analysis tasks"""
         
         # Vulnerability classification chain
+        self.classification_parser = PydanticOutputParser(pydantic_object=VulnerabilityPriority)
         classification_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are a mobile application security expert. Analyze the given vulnerability and classify it accurately.
             
@@ -184,7 +185,9 @@ Consider these factors:
 - Scope (how many users/systems affected?)
 - Detectability (how hard is it to detect?)
 
-Provide structured output with severity, category, and detailed reasoning."""),
+{format_instructions}
+
+IMPORTANT: You must respond ONLY with valid JSON. Do not include any markdown formatting, explanations, or additional text outside the JSON."""),
             ("human", """Analyze this mobile app vulnerability:
 
 Title: {title}
@@ -192,11 +195,10 @@ Description: {description}
 Type: {vuln_type}
 Context: {context}
 
-Classify this vulnerability and provide detailed analysis.""")
+Classify this vulnerability and provide detailed analysis in the required JSON format.""")
         ])
         
-        classification_parser = PydanticOutputParser(pydantic_object=VulnerabilityPriority)
-        self.classification_chain = classification_prompt | self.llm | classification_parser
+        self.classification_chain = classification_prompt | self.llm | self.classification_parser
         
         # Impact assessment chain
         impact_prompt = ChatPromptTemplate.from_messages([
@@ -289,7 +291,8 @@ Create a professional executive summary (200-300 words).""")
                     "title": vuln.get("title", ""),
                     "description": vuln.get("description", ""),
                     "vuln_type": vuln.get("type", ""),
-                    "context": json.dumps(state.get("context", {}))
+                    "context": json.dumps(state.get("context", {})),
+                    "format_instructions": self.classification_parser.get_format_instructions()
                 })
                 
                 # Create partial analysis result
