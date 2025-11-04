@@ -13,6 +13,39 @@ from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, validator, ValidationError
 
+# Load environment variables at module level
+# Try to load .env from current directory first, then parent directory
+current_dir = Path(__file__).parent
+root_dir = current_dir.parent
+
+env_paths = [
+    current_dir / ".env",
+    root_dir / ".env"
+]
+
+for env_path in env_paths:
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
+        break
+else:
+    # If no .env file found, just use environment variables
+    load_dotenv(override=False)
+
+# In Kubernetes, prioritize environment variables over .env file
+if os.getenv('MOBSF_API_URL'):
+    MOBSF_API_URL = os.getenv('MOBSF_API_URL')
+else:
+    MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
+MOBSF_API_KEY = os.getenv('MOBSF_API_KEY')
+MOBSF_SCAN_TIMEOUT = int(os.getenv('MOBSF_SCAN_TIMEOUT', '1800'))
+AI_PROVIDER = os.getenv('AI_PROVIDER', 'openai')
+AI_MODEL_NAME = os.getenv('AI_MODEL_NAME', 'gpt-4')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+XAI_API_KEY = os.getenv('XAI_API_KEY')
+AI_TEMPERATURE = float(os.getenv('AI_TEMPERATURE', '0.1'))
+AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '4000'))
 
 logger = logging.getLogger(__name__)
 
@@ -184,10 +217,44 @@ class ConfigManager:
     def _load_environment(self) -> None:
         """Load environment variables from .env file"""
         if os.path.exists(self.env_file):
-            load_dotenv(self.env_file)
+            load_dotenv(self.env_file, override=False)
             logger.info(f"Loaded environment variables from: {self.env_file}")
         else:
             logger.warning(f"Environment file not found: {self.env_file}")
+    
+    def reload_environment_variables(self) -> None:
+        """Force reload of all environment variables and update module globals"""
+        global MOBSF_API_URL, MOBSF_API_KEY, MOBSF_SCAN_TIMEOUT, AI_PROVIDER, AI_MODEL_NAME
+        global OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, XAI_API_KEY, AI_TEMPERATURE, AI_MAX_TOKENS
+        
+        # Force reload multiple .env file locations but don't override K8s env vars
+        load_dotenv('./.env', override=False)
+        load_dotenv(self.env_file, override=False)
+        
+        # Update module-level variables
+        MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
+        MOBSF_API_KEY = os.getenv('MOBSF_API_KEY')
+        
+        # Force correct API key if needed from environment
+        correct_api_key = os.getenv('MOBSF_API_KEY_OVERRIDE') or os.getenv('MOBSF_API_KEY')
+        if correct_api_key and (not MOBSF_API_KEY or MOBSF_API_KEY != correct_api_key):
+            MOBSF_API_KEY = correct_api_key
+            os.environ['MOBSF_API_KEY'] = MOBSF_API_KEY
+        
+        MOBSF_SCAN_TIMEOUT = int(os.getenv('MOBSF_SCAN_TIMEOUT', '1800'))
+        AI_PROVIDER = os.getenv('AI_PROVIDER', 'openai')
+        AI_MODEL_NAME = os.getenv('AI_MODEL_NAME', 'gpt-4')
+        OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+        ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+        GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+        XAI_API_KEY = os.getenv('XAI_API_KEY')
+        AI_TEMPERATURE = float(os.getenv('AI_TEMPERATURE', '0.1'))
+        AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '4000'))
+        
+        logger.info(f"Reloaded environment variables: MOBSF_API_KEY = {MOBSF_API_KEY[:10] + '...' if MOBSF_API_KEY else 'NOT_SET'}")
+        
+        # Reload configuration
+        self._load_configuration()
     
     def _load_configuration(self) -> None:
         """Load and validate configuration"""
@@ -227,28 +294,29 @@ class ConfigManager:
     def _merge_with_environment(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
         """Merge configuration with environment variables"""
         
-        # MobSF configuration
+        # MobSF configuration - Force re-read from environment for Kubernetes
         mobsf_config = config_data.get('mobsf', {})
         mobsf_config.update({
-            'api_url': os.getenv('MOBSF_API_URL') or mobsf_config.get('api_url'),
-            'api_key': os.getenv('MOBSF_API_KEY') or mobsf_config.get('api_key'),
-            'scan_timeout': int(os.getenv('MOBSF_SCAN_TIMEOUT', mobsf_config.get('scan_timeout', 1800)))
+            'api_url': os.getenv('MOBSF_API_URL') or MOBSF_API_URL or mobsf_config.get('api_url'),
+            'api_key': os.getenv('MOBSF_API_KEY') or MOBSF_API_KEY or mobsf_config.get('api_key'),
+            'scan_timeout': MOBSF_SCAN_TIMEOUT or mobsf_config.get('scan_timeout', 1800)
         })
         config_data['mobsf'] = mobsf_config
         
         # AI Provider configuration
         ai_config = config_data.get('ai_provider', {})
         ai_config.update({
-            'provider': os.getenv('AI_PROVIDER') or ai_config.get('provider', 'openai'),
-            'model_name': os.getenv('AI_MODEL_NAME') or ai_config.get('model_name', 'gpt-4'),
-            'api_key': (os.getenv('OPENAI_API_KEY') or 
-                       os.getenv('ANTHROPIC_API_KEY') or 
-                       os.getenv('XAI_API_KEY') or 
-                       os.getenv('GROQ_API_KEY') or 
+            'provider': AI_PROVIDER or ai_config.get('provider', 'openai'),
+            'model_name': AI_MODEL_NAME or ai_config.get('model_name', 'gpt-4'),
+            'api_key': (OPENAI_API_KEY or 
+                       ANTHROPIC_API_KEY or 
+                       XAI_API_KEY or 
+                       GROQ_API_KEY or 
                        os.getenv('OLLAMA_API_KEY') or 
                        ai_config.get('api_key')),
-            'temperature': float(os.getenv('AI_TEMPERATURE', ai_config.get('temperature', 0.1))),
-            'batch_size': int(os.getenv('AI_BATCH_SIZE', ai_config.get('batch_size', 5))),
+            'temperature': AI_TEMPERATURE or ai_config.get('temperature', 0.1),
+            'max_tokens': AI_MAX_TOKENS or ai_config.get('max_tokens', 4000),
+            'batch_size': int(os.getenv('AI_BATCH_SIZE', str(ai_config.get('batch_size', 5)))),
             'enable_memory': os.getenv('AI_ENABLE_MEMORY', str(ai_config.get('enable_memory', True))).lower() == 'true',
             'ollama_base_url': os.getenv('OLLAMA_BASE_URL') or ai_config.get('ollama_base_url', 'http://localhost:11434')
         })
@@ -511,13 +579,18 @@ def get_quick_config() -> AgentConfig:
     Returns:
         AgentConfig: Basic configuration with environment variables
     """
+    # Force re-read environment variables to handle Kubernetes overrides
+    mobsf_url = os.getenv('MOBSF_API_URL')
+    if not mobsf_url:
+        mobsf_url = MOBSF_API_URL
+    
     return AgentConfig(
         mobsf=MobSFConfig(
-            api_url=os.getenv('MOBSF_API_URL', 'http://localhost:8000'),
-            api_key=os.getenv('MOBSF_API_KEY', 'test_key')
+            api_url=mobsf_url,
+            api_key=MOBSF_API_KEY or 'test_key'
         ),
         ai_provider=AIProviderConfig(
-            provider=os.getenv('AI_PROVIDER', 'openai'),
-            api_key=os.getenv('OPENAI_API_KEY') or os.getenv('ANTHROPIC_API_KEY') or os.getenv('XAI_API_KEY')
+            provider=AI_PROVIDER,
+            api_key=OPENAI_API_KEY or ANTHROPIC_API_KEY or XAI_API_KEY or GROQ_API_KEY
         )
     )

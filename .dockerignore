@@ -1,23 +1,8 @@
-# Dockerfile for production build
-/Dockerfile.prod
-
-# Docker build context
-.dockerignore
-
-# Python cache
+# Python cache and build artifacts
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Distribution / packaging
-.Python
 build/
 develop-eggs/
 dist/
@@ -34,14 +19,18 @@ wheels/
 .installed.cfg
 *.egg
 
-# IDE
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE and editor files
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
 
@@ -49,25 +38,36 @@ Thumbs.db
 .git/
 .gitignore
 
-# Logs
-*.log
-logs/
-
-# Test outputs
-outputs/
-scans/
-reports/
-temp/
-
-# Environment files
-.env
-.env.local
-.env.production
-
 # Documentation
+README.md
 *.md
 docs/
 
+# Log files
+*.log
+logs/*.log
+
 # Test files
-test_*
-*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+
+# APK test files
+*.apk
+test*.apk
+
+# Docker files (avoid recursive inclusion)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Environment files that shouldn't be in image
+.env.local
+.env.development
+.env.test

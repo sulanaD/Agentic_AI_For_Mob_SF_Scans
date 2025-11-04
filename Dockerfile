@@ -1,52 +1,49 @@
-# Use Python 3.11 as base image
+# Backend Dockerfile - FastAPI with Python 3.11
 FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user for security
+RUN useradd --create-home --shell /bin/bash app
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first for better Docker layer caching
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY src/ ./src/
-COPY templates/ ./templates/
-COPY agent.py .
-COPY api_server.py .
-COPY simple_api_server.py .
-COPY enhanced_api_server.py .
-COPY examples.py .
-COPY langchain_examples.py .
-COPY validate_langchain.py .
+COPY . .
 
-# Create directories for outputs
-RUN mkdir -p /app/outputs /app/scans /app/reports
+# Use Kubernetes-specific .env file
+COPY .env.k8s .env
 
-# Set environment variables
-ENV PYTHONPATH=/app
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Create necessary directories
+RUN mkdir -p /app/logs /app/reports /app/checkpoints && \
+    chown -R app:app /app
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash appuser && \
-    chown -R appuser:appuser /app
-USER appuser
+# Switch to app user
+USER app
+
+# Expose port
+EXPOSE 8001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+    CMD curl -f http://localhost:8001/health || exit 1
 
-# Expose port for the agent API
-EXPOSE 8000
-
-# Default command to run the enhanced API server with AI capabilities
-CMD ["python", "enhanced_api_server.py"]
+# Default command
+CMD ["uvicorn", "api_backend:app", "--host", "0.0.0.0", "--port", "8001"]

@@ -1,0 +1,973 @@
+/* Mobile Security Analysis App Styles */
+
+.App {
+  text-align: center;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+}
+
+.App-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem;
+  color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.App-header p {
+  margin: 0.5rem 0 0 0;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  background: white;
+  padding: 1rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-label {
+  font-size: 0.9rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.status-value {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.status-value.healthy {
+  color: #28a745;
+}
+
+.status-value.unhealthy {
+  color: #dc3545;
+}
+
+/* Navigation Tabs */
+.nav-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 2rem;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tab {
+  flex: 1;
+  padding: 1rem 2rem;
+  border: none;
+  background: white;
+  color: #6c757d;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-bottom: 3px solid transparent;
+}
+
+.tab:hover {
+  background: #f8f9fa;
+  color: #495057;
+}
+
+.tab.active {
+  background: #667eea;
+  color: white;
+  border-bottom-color: #5a6fd8;
+}
+
+/* Tab Content */
+.tab-content {
+  background: white;
+  border-radius: 10px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-align: left;
+}
+
+/* Upload Section */
+.upload-section h2 {
+  color: #495057;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+/* Scan Status Section */
+.scan-status-section {
+  background: white;
+  border-radius: 10px;
+  padding: 2rem;
+  margin: 2rem 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.scan-status-section h3 {
+  color: #495057;
+  margin-bottom: 1rem;
+}
+
+.status-message {
+  color: #6c757d;
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+}
+
+.status-message.success {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.status-message.error {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.scan-info {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.scan-info p {
+  margin: 0.5rem 0;
+  color: #495057;
+}
+
+.scan-info strong {
+  color: #495057;
+}
+
+/* AI Analysis Results Section */
+.ai-results-section {
+  background: white;
+  border-radius: 10px;
+  padding: 2rem;
+  margin: 2rem 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-align: left;
+}
+
+.ai-results-section h3 {
+  color: #495057;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.security-score {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1.5rem;
+  border-radius: 10px;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.security-score h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.2rem;
+}
+
+.score-value {
+  font-size: 2rem;
+  font-weight: bold;
+  margin: 0;
+}
+
+.vulnerabilities-section {
+  margin-top: 2rem;
+}
+
+.vulnerabilities-section h4 {
+  color: #495057;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 0.5rem;
+}
+
+.upload-form {
+  max-width: 600px;
+  margin: 0 auto 2rem auto;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.form-group input[type="file"],
+.form-group input[type="text"] {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.file-info {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.file-info p {
+  margin: 0.25rem 0;
+  color: #495057;
+}
+
+.upload-btn {
+  width: 100%;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.upload-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.upload-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.supported-formats {
+  text-align: center;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  color: #6c757d;
+}
+
+.supported-formats h3 {
+  margin-bottom: 1rem;
+  color: #495057;
+}
+
+/* Scans Section */
+.scans-section h2 {
+  color: #495057;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.refresh-btn {
+  display: block;
+  margin: 0 auto 2rem auto;
+  padding: 0.5rem 1rem;
+  background: #17a2b8;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.refresh-btn:hover {
+  background: #138496;
+}
+
+.scans-list {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.no-scans {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  padding: 2rem;
+}
+
+.scan-item {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.scan-item:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.scan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.scan-header h3 {
+  margin: 0;
+  color: #495057;
+  word-break: break-word;
+}
+
+.scan-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.scan-details p {
+  margin: 0.5rem 0;
+  color: #6c757d;
+  word-break: break-all;
+}
+
+.progress-bar {
+  position: relative;
+  background: #e9ecef;
+  height: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #28a745, #20c997);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.view-results-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.3s ease;
+}
+
+.view-results-btn:hover {
+  background: #5a6fd8;
+}
+
+.error-message {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+  border: 1px solid #f5c6cb;
+}
+
+/* Status Section */
+.status-section h2 {
+  color: #495057;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.status-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 2rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.status-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 2rem;
+  transition: all 0.3s ease;
+}
+
+.status-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+}
+
+.status-card h3 {
+  margin-bottom: 1.5rem;
+  color: #495057;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 0.5rem;
+}
+
+.components h4 {
+  margin: 1rem 0 0.5rem 0;
+  color: #6c757d;
+  font-size: 1rem;
+}
+
+.component-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.component-name {
+  font-weight: 500;
+  color: #495057;
+}
+
+.component-value.healthy {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.component-value.unhealthy {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.features h4 {
+  margin: 1rem 0 0.5rem 0;
+  color: #6c757d;
+  font-size: 1rem;
+}
+
+.feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.feature-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.feature-item span:first-child {
+  font-weight: 500;
+  color: #495057;
+}
+
+.feature-item .enabled {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.feature-item .disabled {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+  
+  .status-bar {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .nav-tabs {
+    flex-direction: column;
+  }
+  
+  .tab {
+    padding: 0.75rem 1rem;
+  }
+  
+  .scan-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .status-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .App-header h1 {
+    font-size: 2rem;
+  }
+  
+  .App-header p {
+    font-size: 1rem;
+  }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 15px;
+  width: 90%;
+  max-width: 1200px;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.modal-body {
+  padding: 2rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Scan Overview Styles */
+.scan-overview {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.overview-card {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 10px;
+  border-left: 4px solid #667eea;
+}
+
+.overview-card h3 {
+  margin: 0 0 1rem 0;
+  color: #495057;
+  font-size: 1.1rem;
+}
+
+.overview-card p {
+  margin: 0.5rem 0;
+  color: #6c757d;
+}
+
+.security-score {
+  text-align: center;
+  border-left-color: #28a745;
+}
+
+.score-display {
+  margin: 1rem 0;
+}
+
+.score-number {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #495057;
+}
+
+.score-total {
+  font-size: 1.5rem;
+  color: #6c757d;
+}
+
+.score-bar {
+  width: 100%;
+  height: 10px;
+  background: #e9ecef;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.score-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* AI Analysis Section */
+.ai-analysis-section {
+  background: white;
+  border-radius: 10px;
+  border: 2px solid #e9ecef;
+}
+
+.ai-analysis-section h3 {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  margin: 0;
+  padding: 1rem 1.5rem;
+  border-radius: 8px 8px 0 0;
+}
+
+.analysis-intro {
+  padding: 1rem 1.5rem;
+  background: #f8f9fa;
+  color: #6c757d;
+  margin: 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.vulnerabilities-list {
+  padding: 1rem;
+}
+
+/* Vulnerability Card Styles */
+.vulnerability-card {
+  background: white;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+
+.vulnerability-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.vulnerability-header {
+  background: #f8f9fa;
+  padding: 1rem 1.5rem;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.vulnerability-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.severity-icon {
+  font-size: 1.5rem;
+}
+
+.vulnerability-title h4 {
+  margin: 0;
+  flex: 1;
+  color: #495057;
+  font-size: 1.1rem;
+}
+
+.severity-badge {
+  color: white;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.priority-info {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+.priority-score, .confidence-score {
+  background: #e9ecef;
+  padding: 0.3rem 0.75rem;
+  border-radius: 15px;
+  font-weight: 500;
+}
+
+.vulnerability-content {
+  padding: 1.5rem;
+}
+
+.vulnerability-description {
+  margin-bottom: 1.5rem;
+}
+
+.vulnerability-description h5 {
+  color: #495057;
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+}
+
+.vulnerability-description p {
+  color: #6c757d;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.vulnerability-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.detail-section {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+.detail-section h5 {
+  color: #495057;
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+}
+
+.detail-section p {
+  margin: 0.3rem 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.remediation-section {
+  background: #e8f5e8;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #28a745;
+  margin-bottom: 1.5rem;
+}
+
+.remediation-section h5 {
+  color: #155724;
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+}
+
+.remediation-list {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: #155724;
+}
+
+.remediation-list li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.no-remediation {
+  color: #856404;
+  font-style: italic;
+  margin: 0;
+}
+
+.impact-assessment {
+  background: #fff3cd;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #ffc107;
+  margin-bottom: 1.5rem;
+}
+
+.impact-assessment h5 {
+  color: #856404;
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+}
+
+.impact-assessment p {
+  color: #856404;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ai-reasoning {
+  background: #e7f3ff;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #007bff;
+  margin-bottom: 1.5rem;
+}
+
+.ai-reasoning h5 {
+  color: #004085;
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+}
+
+.reasoning-text {
+  color: #004085;
+  margin: 0;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.references-section {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.references-section h5 {
+  color: #495057;
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+}
+
+.references-section p {
+  margin: 0.3rem 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.reference-links {
+  margin-top: 0.75rem;
+}
+
+.reference-link {
+  display: inline-block;
+  color: #007bff;
+  text-decoration: none;
+  padding: 0.3rem 0.75rem;
+  background: #e7f3ff;
+  border-radius: 15px;
+  margin: 0.25rem 0.5rem 0.25rem 0;
+  font-size: 0.85rem;
+  transition: background-color 0.3s ease;
+}
+
+.reference-link:hover {
+  background: #cce7ff;
+  text-decoration: none;
+}
+
+.no-ai-analysis {
+  text-align: center;
+  padding: 3rem;
+  color: #6c757d;
+}
+
+.no-ai-analysis h3 {
+  color: #495057;
+  margin-bottom: 1rem;
+}
+
+/* Responsive Modal Styles */
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    max-height: 95vh;
+  }
+  
+  .modal-header {
+    padding: 1rem;
+  }
+  
+  .modal-body {
+    padding: 1rem;
+  }
+  
+  .scan-overview {
+    grid-template-columns: 1fr;
+  }
+  
+  .vulnerability-details {
+    grid-template-columns: 1fr;
+  }
+  
+  .vulnerability-title {
+    flex-wrap: wrap;
+  }
+  
+  .priority-info {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

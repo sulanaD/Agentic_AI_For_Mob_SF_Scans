@@ -1,11 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mobsf-deployment
+  name: mobsf
   namespace: mobile-security
   labels:
     app: mobsf
-    component: scanner
 spec:
   replicas: 1
   selector:
@@ -15,23 +14,25 @@ spec:
     metadata:
       labels:
         app: mobsf
-        component: scanner
     spec:
       containers:
       - name: mobsf
         image: opensecurity/mobile-security-framework-mobsf:latest
         ports:
         - containerPort: 8000
-          name: http
         env:
-        - name: MOBSF_API_ONLY
+        - name: MOBSF_API_KEY
           valueFrom:
-            configMapKeyRef:
-              name: mobile-security-config
-              key: MOBSF_API_ONLY
+            secretKeyRef:
+              name: api-keys
+              key: mobsf-api-key
         volumeMounts:
         - name: mobsf-data
-          mountPath: /home/mobsf/.MobSF
+          mountPath: /home/mobsf/Mobile-Security-Framework-MobSF/uploads
+        - name: mobsf-data
+          mountPath: /home/mobsf/Mobile-Security-Framework-MobSF/StaticAnalyzer/android/generated
+        - name: mobsf-data
+          mountPath: /home/mobsf/Mobile-Security-Framework-MobSF/StaticAnalyzer/ios/generated
         resources:
           requests:
             memory: "1Gi"
@@ -39,42 +40,33 @@ spec:
           limits:
             memory: "2Gi"
             cpu: "1000m"
-        livenessProbe:
-          httpGet:
-            path: /api_docs
-            port: 8000
-          initialDelaySeconds: 120
-          periodSeconds: 30
-          timeoutSeconds: 10
-          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /api_docs
             port: 8000
-          initialDelaySeconds: 60
+          initialDelaySeconds: 30
           periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /api_docs
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
       volumes:
       - name: mobsf-data
         persistentVolumeClaim:
           claimName: mobsf-data-pvc
-      restartPolicy: Always
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: mobsf-service
   namespace: mobile-security
-  labels:
-    app: mobsf
-    component: scanner
 spec:
-  type: ClusterIP
-  ports:
-  - port: 8000
-    targetPort: 8000
-    protocol: TCP
-    name: http
   selector:
     app: mobsf
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP

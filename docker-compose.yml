@@ -1,60 +1,81 @@
 version: '3.8'
 
 services:
+  # MobSF Service
   mobsf:
-    image: opensecurity/mobile-security-framework-mobsf:latest
+    image: opensecurity/mobsf:latest
     container_name: mobsf
     ports:
       - "8000:8000"
     environment:
-      - MOBSF_API_ONLY=1
+      - MOBSF_API_KEY=${MOBSF_API_KEY:-3a6acdbf06a54f1d247162535701f826b362a30778aca23d8d1b80e0d68c5437}
     volumes:
       - mobsf_data:/home/mobsf/.MobSF
     networks:
-      - security_net
-    restart: unless-stopped
+      - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api_docs"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 60s
 
-  security-agent:
-    build: .
-    container_name: security-agent
+  # Backend Service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mobile-security-backend
     ports:
-      - "8080:8000"
+      - "8081:8081"
     environment:
-      - MOBSF_URL=http://mobsf:8000
-      - MOBSF_API_KEY=${MOBSF_API_KEY:-your-mobsf-api-key}
-      - GROQ_API_KEY=${GROQ_API_KEY:-your-groq-api-key}
-      - AI_PROVIDER=groq
-      - AI_MODEL=llama-3.3-70b-versatile
-      - DEBUG=false
+      - MOBSF_API_URL=http://mobsf:8000
+      - MOBSF_API_KEY=${MOBSF_API_KEY:-3a6acdbf06a54f1d247162535701f826b362a30778aca23d8d1b80e0d68c5437}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - AI_PROVIDER=${AI_PROVIDER:-groq}
+      - AI_MODEL_NAME=${AI_MODEL_NAME:-llama-3.3-70b-versatile}
+      - AI_TEMPERATURE=${AI_TEMPERATURE:-0.1}
+      - AI_MAX_TOKENS=${AI_MAX_TOKENS:-2000}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - agent_data:/app/outputs
-      - agent_reports:/app/reports
-      - agent_scans:/app/scans
+      - backend_logs:/app/logs
+      - backend_reports:/app/reports
     networks:
-      - security_net
+      - app-network
     depends_on:
       mobsf:
         condition: service_healthy
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mobile-security-frontend
+    ports:
+      - "80:80"
+    networks:
+      - app-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
 
 networks:
-  security_net:
+  app-network:
     driver: bridge
 
 volumes:
   mobsf_data:
-  agent_data:
-  agent_reports:
-  agent_scans:
+  backend_logs:
+  backend_reports:
