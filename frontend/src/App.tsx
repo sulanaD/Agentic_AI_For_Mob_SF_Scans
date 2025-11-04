@@ -72,7 +72,7 @@ interface ConfigResponse {
   };
 }
 
-const API_BASE_URL = 'http://localhost:8081';
+const API_BASE_URL = '/api';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);

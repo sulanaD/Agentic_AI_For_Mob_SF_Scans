@@ -25,12 +25,17 @@ env_paths = [
 
 for env_path in env_paths:
     if env_path.exists():
-        load_dotenv(env_path, override=True)
+        load_dotenv(env_path, override=False)
         break
 else:
     # If no .env file found, just use environment variables
-    load_dotenv(override=True)
-MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
+    load_dotenv(override=False)
+
+# In Kubernetes, prioritize environment variables over .env file
+if os.getenv('MOBSF_API_URL'):
+    MOBSF_API_URL = os.getenv('MOBSF_API_URL')
+else:
+    MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
 MOBSF_API_KEY = os.getenv('MOBSF_API_KEY')
 MOBSF_SCAN_TIMEOUT = int(os.getenv('MOBSF_SCAN_TIMEOUT', '1800'))
 AI_PROVIDER = os.getenv('AI_PROVIDER', 'openai')
@@ -212,7 +217,7 @@ class ConfigManager:
     def _load_environment(self) -> None:
         """Load environment variables from .env file"""
         if os.path.exists(self.env_file):
-            load_dotenv(self.env_file, override=True)
+            load_dotenv(self.env_file, override=False)
             logger.info(f"Loaded environment variables from: {self.env_file}")
         else:
             logger.warning(f"Environment file not found: {self.env_file}")
@@ -222,9 +227,9 @@ class ConfigManager:
         global MOBSF_API_URL, MOBSF_API_KEY, MOBSF_SCAN_TIMEOUT, AI_PROVIDER, AI_MODEL_NAME
         global OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, XAI_API_KEY, AI_TEMPERATURE, AI_MAX_TOKENS
         
-        # Force reload multiple .env file locations
-        load_dotenv('./.env', override=True)
-        load_dotenv(self.env_file, override=True)
+        # Force reload multiple .env file locations but don't override K8s env vars
+        load_dotenv('./.env', override=False)
+        load_dotenv(self.env_file, override=False)
         
         # Update module-level variables
         MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
@@ -289,11 +294,11 @@ class ConfigManager:
     def _merge_with_environment(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
         """Merge configuration with environment variables"""
         
-        # MobSF configuration
+        # MobSF configuration - Force re-read from environment for Kubernetes
         mobsf_config = config_data.get('mobsf', {})
         mobsf_config.update({
-            'api_url': MOBSF_API_URL or mobsf_config.get('api_url'),
-            'api_key': MOBSF_API_KEY or mobsf_config.get('api_key'),
+            'api_url': os.getenv('MOBSF_API_URL') or MOBSF_API_URL or mobsf_config.get('api_url'),
+            'api_key': os.getenv('MOBSF_API_KEY') or MOBSF_API_KEY or mobsf_config.get('api_key'),
             'scan_timeout': MOBSF_SCAN_TIMEOUT or mobsf_config.get('scan_timeout', 1800)
         })
         config_data['mobsf'] = mobsf_config
@@ -574,9 +579,14 @@ def get_quick_config() -> AgentConfig:
     Returns:
         AgentConfig: Basic configuration with environment variables
     """
+    # Force re-read environment variables to handle Kubernetes overrides
+    mobsf_url = os.getenv('MOBSF_API_URL')
+    if not mobsf_url:
+        mobsf_url = MOBSF_API_URL
+    
     return AgentConfig(
         mobsf=MobSFConfig(
-            api_url=MOBSF_API_URL,
+            api_url=mobsf_url,
             api_key=MOBSF_API_KEY or 'test_key'
         ),
         ai_provider=AIProviderConfig(

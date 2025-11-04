@@ -21,20 +21,18 @@ from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-# Force reload environment variables
-load_dotenv(override=True)
+# Ensure Kubernetes environment variables take precedence
+if 'MOBSF_API_URL' not in os.environ:
+    os.environ['MOBSF_API_URL'] = 'http://mobsf-service:8000'
 
-# Clear any cached environment variables
-if 'MOBSF_API_KEY' in os.environ:
-    del os.environ['MOBSF_API_KEY']
-if 'GROQ_API_KEY' in os.environ:
-    del os.environ['GROQ_API_KEY']
+# Force reload environment variables but don't override existing ones
+load_dotenv(override=False)  # Don't override env vars with .env file
 
-# Force reload with override
-load_dotenv('.env', override=True)
-load_dotenv('src/.env', override=True)
+# Force reload from .env files again to pick up any missing vars
+load_dotenv('./.env', override=False)
+load_dotenv('../.env', override=False)
 
-# Load environment variables at module level
+# Load environment variables at module level - prioritize K8s env vars
 MOBSF_API_URL = os.getenv('MOBSF_API_URL', 'http://localhost:8000')
 # Note: MOBSF_API_KEY is read dynamically to support env changes
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
@@ -216,7 +214,7 @@ async def scan_mobile_app(
         )
     
     # Ensure we're using the current API key from environment
-    load_dotenv(override=True)
+    load_dotenv(override=False)
     
     # Force read from .env file and update environment
     env_key = None
@@ -402,9 +400,9 @@ async def get_scan_results(scan_id: str):
 @app.get("/debug-env")
 async def debug_environment():
     """Debug endpoint to check environment variables"""
-    # Force reload environment
+    # Force reload environment but don't override K8s env vars
     from dotenv import load_dotenv
-    load_dotenv(override=True)
+    load_dotenv(override=False)
     
     # Read current values dynamically
     current_mobsf_key = os.getenv('MOBSF_API_KEY')
@@ -440,9 +438,9 @@ async def reload_security_agent():
         if correct_api_key:
             os.environ['MOBSF_API_KEY'] = correct_api_key
         
-        # Force reload environment variables at all levels
+        # Force reload environment variables at all levels but don't override K8s env vars
         from dotenv import load_dotenv
-        load_dotenv('.env', override=True)
+        load_dotenv('.env', override=False)
         
         # Update our module-level variables directly
         MOBSF_API_KEY = correct_api_key
